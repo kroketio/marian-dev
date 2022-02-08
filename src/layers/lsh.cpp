@@ -3,7 +3,7 @@
 #include "tensors/cpu/prod_blas.h"
 
 #if BLAS_FOUND
-#include "3rd_party/faiss/IndexLSH.h"
+#include "faiss/IndexLSH.h"
 #endif
 
 namespace marian {

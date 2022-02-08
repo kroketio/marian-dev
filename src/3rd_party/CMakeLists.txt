@@ -5,17 +5,35 @@ add_subdirectory(./yaml-cpp)
 if(NOT USE_WASM_COMPATIBLE_SOURCE)
   add_subdirectory(./SQLiteCpp)
   add_subdirectory(./zlib)
+
   add_subdirectory(./faiss)
   include_directories(./faiss)
 endif()
+
 add_subdirectory(./pathie-cpp)
 
-set(INTGEMM_DONT_BUILD_TESTS ON CACHE BOOL "Disable intgemm tests")
-add_subdirectory(./intgemm)
+if(USE_INTGEMM)
+  set(INTGEMM_DONT_BUILD_TESTS ON CACHE BOOL "Disable intgemm tests")
+  add_subdirectory(./intgemm)
+endif(USE_INTGEMM)
 
-if(USE_WASM_COMPATIBLE_BLAS)
+if(USE_RUY)
+  set(CPUINFO_BUILD_MOCK_TESTS OFF CACHE BOOL " " FORCE)
+  set(CPUINFO_BUILD_BENCHMARKS OFF CACHE BOOL " " FORCE)
+  set(CPUINFO_BUILD_PKG_CONFIG OFF CACHE BOOL " " FORCE)
+  set(CPUINFO_BUILD_UNIT_TESTS OFF CACHE BOOL " " FORCE)
+  set(CPUINFO_BUILD_TOOLS      OFF CACHE BOOL " " FORCE)
+  add_subdirectory(ruy/third_party/cpuinfo EXCLUDE_FROM_ALL)
+  add_subdirectory(ruy EXCLUDE_FROM_ALL)
+endif(USE_RUY)
+
+if(USE_SIMDE)
+  include_directories(./simde-no-tests)
+endif(USE_SIMDE)
+
+if(USE_ONNX_SGEMM)
   add_subdirectory(./onnxjs)
-endif(USE_WASM_COMPATIBLE_BLAS)
+endif(USE_ONNX_SGEMM)
 
 if(USE_FBGEMM)
   # @TODO: find out if this is somehow harmful. This is supppressing CMake warnings for CMAKE_SUPPRESS_DEVELOPER_WARNINGS

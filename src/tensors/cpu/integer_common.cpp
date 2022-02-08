@@ -1,5 +1,18 @@
 #include "integer_common.h"
 
+#ifndef USE_SIMDE
+#include <emmintrin.h>
+#include <immintrin.h>
+#include <tmmintrin.h>
+#include <xmmintrin.h>
+#else // USE_SIMDE
+// https://wiki.debian.org/SIMDEverywhere#Approach
+#include "x86/sse2.h"
+#include "x86/avx2.h"
+#include "x86/ssse3.h"
+#include "x86/sse.h"
+#endif
+
 namespace marian {
 namespace cpu {
 namespace integer {

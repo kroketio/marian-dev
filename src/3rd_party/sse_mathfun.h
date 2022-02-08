@@ -29,7 +29,13 @@
   (this is the zlib license)
 */
 
+#ifndef USE_SIMDE
 #include <xmmintrin.h>
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+#include "x86/sse.h"
+#endif
 
 /* yes I know, the top of this file is quite ugly */
 
@@ -712,3 +718,6 @@ static inline void sincos_ps(v4sf x, v4sf *s, v4sf *c) {
   *c = _mm_xor_ps(xmm2, sign_bit_cos);
 }
 
+#ifdef USE_SIMDE
+#pragma GCC diagnostic pop
+#endif

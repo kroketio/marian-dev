@@ -31,29 +31,31 @@ option(USE_CCACHE "Use ccache compiler cache (https://ccache.dev)" OFF)
 option(USE_CUDNN "Use CUDNN library" OFF)
 option(USE_DOXYGEN "Build documentation with Doxygen" ON)
 option(USE_FBGEMM "Use FBGEMM" OFF)
+option(USE_INTGEMM "Use INTGEMM" ON)
 option(USE_MKL "Compile with MKL support" ON)
 option(USE_MPI "Use MPI library" OFF)
 option(USE_NCCL "Use NCCL library" ON)
 option(USE_SENTENCEPIECE "Download and compile SentencePiece" ON)
 option(USE_STATIC_LIBS "Link statically against non-system libs" OFF)
 option(GENERATE_MARIAN_INSTALL_TARGETS "Generate Marian install targets (requires CMake 3.12+)" OFF)
-option(M32_BINARIES "Generate 32bit binaries even when building outside of WASM. Useful for testing some WASM specific functionality without the need for the compiling to WASM." OFF)
 option(COMPILE_WASM "Compile (wasm compatible) marian for WASM target" OFF)
 option(USE_WASM_COMPATIBLE_SOURCE "Enable the minimal marian sources that compile to wasm. Useful for debugging wasm failures by building same sources natively" OFF)
+
+option(USE_SIMDE "Enable simde to target instruction sets" OFF)
+option(USE_ONNX_SGEMM "Compile with wasm compatible blas" OFF)
+option(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" OFF)
 
 # cmake options that are dependent on USE_WASM_COMPATIBLE_SOURCE cmake option
 CMAKE_DEPENDENT_OPTION(USE_THREADS "Compile with multi-threading support" OFF
                        "USE_WASM_COMPATIBLE_SOURCE" ON)
-CMAKE_DEPENDENT_OPTION(USE_WASM_COMPATIBLE_BLAS "Compile with wasm compatible blas" ON
-                       "USE_WASM_COMPATIBLE_SOURCE" OFF)
-CMAKE_DEPENDENT_OPTION(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" ON
-                       "USE_WASM_COMPATIBLE_SOURCE" OFF)
 
 if (USE_WASM_COMPATIBLE_SOURCE)
   set(SPM_BUILD_LIBRARY_ONLY ON CACHE BOOL "Build only sentencepiece library (skip building executables)")
   add_compile_definitions(WASM_COMPATIBLE_SOURCE)
   # Setting USE_SSE2 definition to enable SSE2 specific code in "3rd_party/sse_mathfun.h" for wasm builds
   add_compile_definitions(USE_SSE2)
+  set(USE_ONNX_SGEMM ON CACHE BOOL "")
+  set(COMPILE_WITHOUT_EXCEPTIONS ON CACHE BOOL "")
 endif()
 
 if (COMPILE_WASM)
@@ -61,10 +63,11 @@ if (COMPILE_WASM)
   set(WORMHOLE ON CACHE BOOL "Use WASM wormhole in intgemm https://bugzilla.mozilla.org/show_bug.cgi?id=1672160")
 endif()
 
-if(M32_BINARIES OR COMPILE_WASM)
+
+if(COMPILE_WASM)
     set("BUILD_WIDTH" "-m32")
-else(M32_BINARIES OR COMPILE_WASM)
-    set("BUILD_WIDTH" "-m64")
+else(COMPILE_WASM)
+    set("BUILD_WIDTH" "")
 endif()
 
 if(NOT COMPILE_WASM)
@@ -167,6 +170,7 @@ if(MSVC)
   # set(INTRINSICS "/arch:AVX")
   add_definitions(-DUSE_SSE2=1)
 
+
   # Or maybe use these?
   set(INTRINSICS ${MSVC_BUILD_ARCH})
   # set(INTRINSICS "/arch:AVX512")
@@ -193,6 +197,16 @@ if(MSVC)
     set(EXT_LIBS ${EXT_LIBS} fbgemm)
     add_definitions(-DUSE_FBGEMM=1 -DFBGEMM_STATIC=1)
   endif(USE_FBGEMM)
+
+  if(USE_INTGEMM)
+    add_definitions(-DUSE_INTGEMM=1)
+  endif(USE_INTGEMM)
+
+  if(USE_SIMDE)
+    add_definitions(-DUSE_SIMDE=1)
+    add_definitions(-DSIMDE_ENABLE_NATIVE_ALIASES=1)
+  endif(USE_SIMDE)
+
 else(MSVC)
 
   # Check we are using at least g++ 5.0
@@ -249,13 +263,22 @@ else(MSVC)
     # -msse4.1 once marian can solely be compiled with intgemm ("onnxjs" will be removed in that case)
     set(INTRINSICS "-mssse3 -msimd128")
   else()
-    set(INTRINSICS "-msse4.1")
+    # Not assuming we have "-msse4.1 here"
   endif()
 
   if(USE_FBGEMM)
     set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
     add_definitions(-DUSE_FBGEMM=1)
   endif(USE_FBGEMM)
+
+  if(USE_INTGEMM)
+    add_definitions(-DUSE_INTGEMM=1)
+  endif(USE_INTGEMM)
+
+  if(USE_SIMDE)
+    add_definitions(-DUSE_SIMDE=1)
+    add_definitions(-DSIMDE_ENABLE_NATIVE_ALIASES=1)
+  endif(USE_SIMDE)
 
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
     # Clang-10.0.0 complains when CUDA is newer than 10.1
@@ -266,7 +289,8 @@ else(MSVC)
   set(DISABLE_GLOBALLY "-Wno-unused-result ${CLANG_IGNORE_UNKNOWN_CUDA} ${CLANG_IGNORE_UNUSED_VALUES}") # This needs to appear here as well to appease clang11+ on linux
 
   # These are used in src/CMakeLists.txt on a per-target basis
-  list(APPEND ALL_WARNINGS -Wall; -Werror; -Wextra; -Wno-unused-result; -Wno-deprecated;
+  list(APPEND ALL_WARNINGS -Wall; # -Werror; 
+    -Wextra; -Wno-unused-result; -Wno-deprecated;
     -Wno-pragmas; -Wno-unused-parameter; -Wno-unused-function;
     -Wno-unused-value; -Wno-unknown-pragmas; -Wno-sign-compare;
     -Wno-missing-field-initializers; ${CLANG_IGNORE_UNUSED_PRIVATE_FIELD})
@@ -542,24 +566,32 @@ endif(USE_MPI)
 ###############################################################################
 # Find BLAS library for CPU compilation
 if(COMPILE_CPU)
-  set(EXT_LIBS ${EXT_LIBS} intgemm)       # Move the intgemm bits on top since they compile with every single variant
+  if(USE_INTGEMM)
+      set(EXT_LIBS ${EXT_LIBS} intgemm)       # Move the intgemm bits on top since they compile with every single variant
+  endif(USE_INTGEMM)
+
+  if(USE_RUY)
+    set(EXT_LIBS ${EXT_LIBS} ruy)
+  endif(USE_RUY)
+
   add_definitions(-DCOMPILE_CPU=1)        # Move the compile CPU definition on top since we want to compile intgemm when we set compile CPU
                                           # in case a BLAS vendor is not found, we have a runtime error, although we should probably not allow the compilation to go on
                                           # if there are BLAS vendors, we have other runtime checks with sane error messages.
-  if(USE_WASM_COMPATIBLE_BLAS)
+  if(USE_ONNX_SGEMM)
     ## Use a wasm compatible BLAS
+    ## ^ SGEMM != BLAS
     set(EXT_LIBS ${EXT_LIBS} onnx-sgemm)
-    set(BLAS_FOUND TRUE)
-    set(BLAS_VENDOR "ONNX-SGEMM")
-    add_definitions(-DBLAS_FOUND=1  -DWASM_COMPATIBLE_BLAS=1) # Might be required in some cmake files further down the line, let's avoid using add_compile_definitions in this codeblock
-  elseif(APPLE AND USE_APPLE_ACCELERATE)
+    add_definitions(-DUSE_ONNX_SGEMM=1) # Might be required in some cmake files further down the line, let's avoid using add_compile_definitions in this codeblock
+  endif(USE_ONNX_SGEMM)
+
+  if(APPLE AND USE_APPLE_ACCELERATE)
     set(BLAS_VENDOR "Accelerate")
     # see https://developer.apple.com/documentation/accelerate for more info
     # you may need to install Xcode command line tools if you don't have them already (https://developer.apple.com/xcode/features/)
     include_directories("/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Frameworks/vecLib.framework/Headers")
     set(EXT_LIBS ${EXT_LIBS} "-framework Accelerate")
     add_definitions(-DBLAS_FOUND=1)
-  else(USE_WASM_COMPATIBLE_BLAS)
+  else(USE_ONNX_SGEMM)
     if(USE_MKL)
       find_package(MKL)
     endif(USE_MKL)
@@ -580,7 +612,7 @@ if(COMPILE_CPU)
         endif(CBLAS_FOUND)
       endif(BLAS_FOUND)
     endif(MKL_FOUND)
-  endif(USE_WASM_COMPATIBLE_BLAS)
+  endif(USE_ONNX_SGEMM)
 endif(COMPILE_CPU)
 
 ###############################################################################

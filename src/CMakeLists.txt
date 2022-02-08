@@ -7,6 +7,8 @@ include_directories(3rd_party/sentencepiece)
 include_directories(3rd_party/sentencepiece/third_party/protobuf-lite)
 include_directories(3rd_party/fbgemm/include)
 include_directories(3rd_party/intgemm)
+include_directories(3rd_party/ruy)
+include_directories(3rd_party/simde-no-tests)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/3rd_party/intgemm)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/3rd_party)
 include_directories(${CMAKE_BINARY_DIR}/local/include)
@@ -99,12 +101,16 @@ set(MARIAN_SOURCES
   $<TARGET_OBJECTS:pathie-cpp>
 )
 
-if (NOT USE_WASM_COMPATIBLE_SOURCE)
+if (NOT USE_WASM_COMPATIBLE_SOURCE AND NOT ANDROID)
+  # Hi WASM, Android hates this too.
   list(APPEND MARIAN_SOURCES
     3rd_party/ExceptionWithCallStack.cpp
+  )
+endif()
 
+if (NOT USE_WASM_COMPATIBLE_SOURCE)
+  list(APPEND MARIAN_SOURCES
     data/corpus_sqlite.cpp
-    tensors/cpu/fbgemm/packed_gemm.cpp
     layers/lsh.cpp
     optimizers/quantizer.cpp
 
@@ -122,6 +128,11 @@ if (NOT USE_WASM_COMPATIBLE_SOURCE)
     $<TARGET_OBJECTS:zlib>
     $<TARGET_OBJECTS:faiss>
   )
+  if(USE_FBGEMM)
+    list(APPEND MARIAN_SOURCES
+      tensors/cpu/fbgemm/packed_gemm.cpp
+    )
+  endif(USE_FBGEMM)
 endif()
 
 add_library(marian STATIC ${MARIAN_SOURCES})

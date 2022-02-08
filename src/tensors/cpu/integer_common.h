@@ -4,15 +4,16 @@
 #include "tensors/tensor_operators.h"
 #include "tensors/cpu/aligned.h"
 #include "common/io_item.h"
+#ifdef USE_INTGEMM
 #include "3rd_party/intgemm/intgemm/intgemm.h"
+#else // USE_INTGEMM
+#include <ruy/ruy.h>
+#include "ruy_adapter.h"
+#endif // USE_INTGEMM
 #if defined(WASM)
 #include "wasm_intgemm_interface.h"
 #endif
 
-#include <emmintrin.h>
-#include <immintrin.h>
-#include <tmmintrin.h>
-#include <xmmintrin.h>
 #include <cassert>
 #include <cstddef>
 
@@ -27,6 +28,11 @@ inline int rows(Tensor& tensor) { return tensor->shape().elements() / cols(tenso
 inline int cols(Shape& shape) { return shape[-1]; }
 inline int rows(Shape& shape) { return shape.elements() / cols(shape); }
 
+// This operates on floats after processing so doesn't care about int8_t vs int16_t.
+void AddBias(marian::Tensor C, const marian::Tensor Bias);
+
+#ifdef USE_INTGEMM
+
 template<Type type> struct intgemm_;
 template <> struct intgemm_<Type::int8> {using width = intgemm::Int8;
                                          using type = int8_t;
@@ -35,8 +41,19 @@ template <> struct intgemm_<Type::int16> {using width = intgemm::Int16;
                                           using type = int16_t;
                                           constexpr static const Type intgemmType = Type::intgemm16;};
 
-// This operates on floats after processing so doesn't care about int8_t vs int16_t.
-void AddBias(marian::Tensor C, const marian::Tensor Bias);
+
+
+#else // USE_INTGEMM
+
+template<Type type> struct intgemm_;
+template <> struct intgemm_<Type::int8> {using width = IntgemmViaRuy::Int8;
+                                         using type = IntgemmViaRuy::Int8::Type;
+                                         constexpr static const Type intgemmType = Type::intgemm8;};
+template <> struct intgemm_<Type::int16> {using width = IntgemmViaRuy::Int16;
+                                          using type = IntgemmViaRuy::Int16::Type;
+                                          constexpr static const Type intgemmType = Type::intgemm16;};
+
+#endif // USE_INTGEMM
 
 // For loading architecture agnostic models. We do PrepareAndTranpose, because we already transposed
 // in our binary format. Then we copy the quantizationMultiplier information at the end
@@ -86,7 +103,7 @@ void prepareAndTransposeB(io::Item& item, const char * input) {
     //Copy the quantMult
     float quantMult = *(reinterpret_cast<const float *>(reinterpret_cast<const Integer *>(input) + item.shape.elements()));
     *(reinterpret_cast<float *>(&(*(output_tensor + item.shape.elements())))) = quantMult;
-    #else
+    #else // COMPILE_CPU
     ABORT("Using intgemm models is supported only with -DCOMPILE_CPU=on");
     #endif
 }
@@ -107,3 +124,4 @@ void unquantizeWemb(io::Item& item, const char * input) {
 } //integer
 } //cpu
 } //marian
+

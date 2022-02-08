@@ -42,7 +42,7 @@ bool shifted_;
                   rows(child(0)->val()),
                   cols(child(0)->val()),
                   val_->data<int8_t>() /*output*/);
-  #else
+  #elif defined(USE_INTGEMM)
     typedef typename intgemm_<vtype>::type Integer;
       if (!shifted_) {
         intgemm_<vtype>::width::PrepareA(child(0)->val()->data(), /*input*/
@@ -57,6 +57,14 @@ bool shifted_;
                                       rows(child(0)->val()),
                                       cols(child(0)->val()));
       }
+  #else 
+  // Copied from above. No shifted in ARM.
+    typedef typename intgemm_<vtype>::type Integer;
+    intgemm_<vtype>::width::PrepareA(child(0)->val()->data(), /*input*/
+                                      val_->data<Integer>(), /*output*/
+                                      *child(1)->val()->data(), /*Quant Mult*/
+                                      rows(child(0)->val()),
+                                      cols(child(0)->val()));
   #endif
   }};
 #else
@@ -258,8 +266,8 @@ struct QuantMultNodeOp : public UnaryNodeOp {
 #pragma warning(push)
 #pragma warning(disable: 4127) //VSCODE thinks line 222 is constant conditional expression, which it is only after the template resolution, not before.
   NodeOps forwardOps() override {
-#ifdef COMPILE_CPU
-    return {NodeOp(
+    return  {[=](){
+    #ifdef COMPILE_CPU
       if (vtype == Type::int16) {
         *val_->data() = 1024.0f;
       } else if (child(0)->type() == "intgemmSelectColumnsB") {
@@ -269,17 +277,21 @@ struct QuantMultNodeOp : public UnaryNodeOp {
         *val_->data() = *(reinterpret_cast<float *>(reinterpret_cast<Integer *>(child(0)->val()->data()) + child(0)->val()->shape().elements()));
       } else {
         if (child(0)->graph()->getBackend()->DumpQuantMult()) {
+          #if defined(USE_INTGEMM)
           intgemm::MeanStd meanstd = intgemm::GetVectorMeanStd(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements(), true);
           intgemm::MeanStd meanstd2 = intgemm::GetVectorMeanStd(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements());
           std::cerr << "Name: " << name() << " MeanAbs: " << meanstd.mean << " stddevAbs: " << meanstd.stddev << " Mean: " << meanstd2.mean << " stddev: "
           << meanstd2.stddev << " MaxAbs: " << intgemm::MaxAbsolute(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements()) << std::endl;
+          #endif
         }
+        #if defined(USE_INTGEMM)
         *val_->data() = 127.0f / intgemm::MaxAbsolute(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements());
+        #else
+        *val_->data() = 127.0f / IntgemmViaRuy::MaxAbsolute(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements());
+        #endif
       }
-    )};
-#else
-    return {NodeOp()};
-#endif
+    #endif // COMPILE_CPU
+    }};
   }
 #pragma warning(pop)
   NodeOps backwardOps() override {
@@ -345,9 +357,11 @@ public:
         float scale_a = *quant_mult_a->data();
         float scale_b = *quant_mult_b->data();
         int8PrepareBias((const int8_t *)b->data(), scale_a, 0.0 /*zero_point_a*/, scale_b, 0.0 /*zero_point_b*/, rows(b), cols(b), bias->data(), val_->data());
-    #else
+    #elif defined(USE_INTGEMM)
         float unquant_mult = (-1)*((127.0f / *quant_mult_a->data())*(127.0f / *quant_mult_b->data()))/(127.0f); //Minus one to invert add_ps later on
         intgemm::Int8Shift::PrepareBias((const int8_t *)b->data(), rows(b), cols(b), intgemm::callbacks::UnquantizeAndAddBiasAndWrite(unquant_mult, bias->data(), val_->data()));
+    #else
+        IntgemmViaRuy::PrepareBias(nullptr, val_->data(), rows(b), cols(b));
     #endif
       }
     }};
@@ -382,9 +396,13 @@ public:
     float scale_a = *quant_mult_a->data();
     float scale_b = *quant_mult_b->data();
     int8PrepareBias((const int8_t *)b->data(), scale_a, 0.0 /*zero_point_a*/, scale_b, 0.0 /*zero_point_b*/, rows(b), cols(b), nullptr/*input_bias*/, val_->data());
-  #else
+  #elif defined(USE_INTGEMM)
     float unquant_mult = (-1)*((127.0f / *quant_mult_a->data())*(127.0f / *quant_mult_b->data()))/(127.0f); //Minus one to invert add_ps later on
     intgemm::Int8Shift::PrepareBias((const int8_t *)b->data(), rows(b), cols(b), intgemm::callbacks::UnquantizeAndWrite(unquant_mult, val_->data()));
+  #else
+    const float *bias = nullptr;
+    float *bias_prepared = val_->data();
+    IntgemmViaRuy::PrepareBias(bias, bias_prepared, rows(b), cols(b));
   #endif
     }};
 #else
@@ -433,7 +451,7 @@ public:
               "Int16::Multiply is not implemented for wasm.");
           ABORT_IF(intgemm_<vtype>::intgemmType == Type::intgemm8,
               "Int8::Multiply is not implemented for wasm.");
-      #else
+      #elif defined(USE_INTGEMM)
           typedef typename intgemm_<vtype>::type Integer;
           intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
                                            reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
@@ -441,6 +459,16 @@ public:
                                            cols(child(0)->val()),
                                            cols(child(1)->val()),
                                            intgemm::callbacks::UnquantizeAndWrite(unquant_mult, val_->data()));
+      #else
+        typedef typename intgemm_<vtype>::type Integer;
+        intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
+                                   reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
+                                   val_->data(), /*output*/
+                                   rows(child(0)->val()),
+                                   cols(child(0)->val()),
+                                   cols(child(1)->val()),                                          
+                                   unquant_mult);
+
       #endif
     }};
 #else
@@ -507,7 +535,7 @@ public:
                                 cols(child(0)->val()),
                                 cols(child(1)->val()),
                                 val_->data());
-      #else
+      #elif defined(USE_INTGEMM)
           typedef typename intgemm_<vtype>::type Integer;
           if (!shifted_) {
             intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
@@ -524,6 +552,18 @@ public:
                                   cols(child(1)->val()),                                          /*child(2) is bias*/
                                   intgemm::callbacks::UnquantizeAndAddBiasAndWrite(unquant_mult, child(2)->val()->data(), val_->data()));
           }
+      #else
+        typedef typename intgemm_<vtype>::type Integer;
+        intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
+                                   reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
+                                   child(2)->val()->data(),  /*child(2) is bias*/
+                                   val_->data(), /*output*/
+                                   rows(child(0)->val()),
+                                   cols(child(0)->val()),
+                                   cols(child(1)->val()),                                          
+                                   unquant_mult);
+
+
       #endif
     }};
 #else
