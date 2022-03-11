@@ -44,14 +44,15 @@ bool shifted_;
                   val_->data<int8_t>() /*output*/);
   #elif defined(USE_INTGEMM)
     typedef typename intgemm_<vtype>::type Integer;
+      auto input = child(0)->val();
       if (!shifted_) {
-        intgemm_<vtype>::width::PrepareA(child(0)->val()->data(), /*input*/
+        intgemm_<vtype>::width::PrepareA(input->data(), /*input*/
                                       val_->data<Integer>(), /*output*/
                                       *child(1)->val()->data(), /*Quant Mult*/
                                       rows(child(0)->val()),
                                       cols(child(0)->val()));
       } else {
-        intgemm::Int8Shift::PrepareA(child(0)->val()->data(), /*input*/
+        intgemm::Int8Shift::PrepareA(input->data(), /*input*/
                                       val_->data<int8_t>(), /*output*/
                                       *child(1)->val()->data(), /*Quant Mult*/
                                       rows(child(0)->val()),
@@ -215,8 +216,8 @@ public:
                     reinterpret_cast<Integer *>(input->data()),
                     val_->data<Integer>(),
                     rows(input),
-                    &*indices_.begin(),
-                    &*indices_.end());
+                    indices_.data(),
+                    indices_.data()+indices_.size());
   #endif
     }};
 #else
@@ -284,10 +285,11 @@ struct QuantMultNodeOp : public UnaryNodeOp {
           << meanstd2.stddev << " MaxAbs: " << intgemm::MaxAbsolute(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements()) << std::endl;
           #endif
         }
+        auto input = child(0)->val();
         #if defined(USE_INTGEMM)
-        *val_->data() = 127.0f / intgemm::MaxAbsolute(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements());
+          *val_->data() = 127.0f / intgemm::MaxAbsolute(input->data(), input->data() + input->size());
         #else
-        *val_->data() = 127.0f / IntgemmViaRuy::MaxAbsolute(child(0)->val()->data(), child(0)->val()->data() + child(0)->val()->shape().elements());
+          *val_->data() = 127.0f / IntgemmViaRuy::MaxAbsolute(input->data(), input->data() + input->size());
         #endif
       }
     #endif // COMPILE_CPU
