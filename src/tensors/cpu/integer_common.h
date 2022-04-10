@@ -124,4 +124,3 @@ void unquantizeWemb(io::Item& item, const char * input) {
 } //integer
 } //cpu
 } //marian
-
