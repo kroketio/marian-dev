@@ -68,10 +68,6 @@ jobs:
         ccache -s # Print current cache stats
         ccache -z # Zero cache entry
 
-    - name: Apply patch sentencepiece for android
-      run: |-
-          patch -p1 < patches/01-spm-protobuf-android.patch
-
     - name: Generate buildfiles for marian on android via cmake
       run: |-
         mkdir -p build 
