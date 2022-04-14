@@ -49,7 +49,16 @@ private:
   T *storage_;
 };
 
-enum class Path { kStandardCpp = 0, kNeon = 1 };
+// The following partitions a pure C++ slow implementation and a faster SIMD implementation using
+// NEON intrinsics on ARM hardware. Ruy already has such a routing, but we add some preprocessing
+// and postprocessing functions (quantize, transpose, unquantize) that are outside ruy's offerings
+// and required in the fast matrix-multiplication workflow for machine-translation, that exists in
+// marian.
+
+enum class Path {
+  kStandardCpp = 0,  // Pure C++
+  kNeon = 1          // NEON Intrinsics (ARM)
+};
 
 #if RUY_PLATFORM_NEON
 constexpr Path kHighestPath = Path::kNeon;
