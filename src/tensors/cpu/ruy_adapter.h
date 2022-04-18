@@ -444,16 +444,6 @@ struct IntgemmViaRuy {
       ruy::MulParams<std::int32_t, std::int32_t> mul_params;
       ruy::Mul(lhs, rhs, mul_params, &context, &dst);
 
-      // Unquantizes, then adds bias in a single statement on the output.
-      // float unquant_multiplier = (1.0f * scale_output) / (scale_A * scale_B);
-      // Preprocess<kHighestPath>::unquantizeAddBias(
-      //     dest_ptr, bias_prepared, unquant_multiplier, rows_A, cols_B, output);
-
-      // Unquantizes, then adds bias in a single statement on the output.
-      // float unquant_multiplier = (1.0f * scale_output) / (scale_A * scale_B);
-      // Preprocess<kHighestPath>::unquantize(dest_ptr, unquant_multiplier, rows_A, cols_B,
-      // output);
-
       callback(dest_ptr, rows_A, cols_B, output);
     }
   };
