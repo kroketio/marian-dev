@@ -22,33 +22,6 @@ namespace integer {
 
 using Index = unsigned int;
 
-/*
- * An AlignedVector is similar to intgemm's aligned allocations. Defined here
- * independently because we are ignoring intgemm path entirely on ARM.
- */
-template <class T>
-class AlignedVector {
-public:
-  AlignedVector(size_t num_elem)
-      : size_(num_elem),
-        storage_(reinterpret_cast<T *>(ruy::detail::SystemAlignedAlloc(sizeof(T) * num_elem))) {}
-
-  T *begin() { return storage_; }
-  T *data() { return storage_; }
-  size_t size() const { return size_; }
-  size_t memSize() const { return sizeof(T) * size_; }
-
-  // Forbid copy
-  AlignedVector(const AlignedVector &) = delete;
-  AlignedVector &operator=(const AlignedVector &) = delete;
-
-  ~AlignedVector() { ruy::detail::SystemAlignedFree(reinterpret_cast<void *>(storage_)); }
-
-private:
-  size_t size_;
-  T *storage_;
-};
-
 // The following partitions a pure C++ slow implementation and a faster SIMD implementation using
 // NEON intrinsics on ARM hardware. Ruy already has such a routing, but we add some preprocessing
 // and postprocessing functions (quantize, transpose, unquantize) that are outside ruy's offerings
