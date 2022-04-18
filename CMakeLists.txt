@@ -263,7 +263,9 @@ else(MSVC)
     # -msse4.1 once marian can solely be compiled with intgemm ("onnxjs" will be removed in that case)
     set(INTRINSICS "-mssse3 -msimd128")
   else()
-    # Not assuming we have "-msse4.1 here"
+    if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
+      set(INTRINSICS "-msse4.1")
+    endif ()
   endif()
 
   if(USE_FBGEMM)
