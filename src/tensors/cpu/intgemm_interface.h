@@ -363,7 +363,7 @@ public:
         float unquant_mult = (-1)*((127.0f / *quant_mult_a->data())*(127.0f / *quant_mult_b->data()))/(127.0f); //Minus one to invert add_ps later on
         intgemm::Int8Shift::PrepareBias((const int8_t *)b->data(), rows(b), cols(b), intgemm::callbacks::UnquantizeAndAddBiasAndWrite(unquant_mult, bias->data(), val_->data()));
     #else
-        IntgemmViaRuy::PrepareBias(nullptr, val_->data(), rows(b), cols(b));
+        ABORT("PrepareBias should not be called on ARM");
     #endif
       }
     }};
@@ -402,9 +402,7 @@ public:
     float unquant_mult = (-1)*((127.0f / *quant_mult_a->data())*(127.0f / *quant_mult_b->data()))/(127.0f); //Minus one to invert add_ps later on
     intgemm::Int8Shift::PrepareBias((const int8_t *)b->data(), rows(b), cols(b), intgemm::callbacks::UnquantizeAndWrite(unquant_mult, val_->data()));
   #else
-    const float *bias = nullptr;
-    float *bias_prepared = val_->data();
-    IntgemmViaRuy::PrepareBias(bias, bias_prepared, rows(b), cols(b));
+    // Not sure what's going on here. 
   #endif
     }};
 #else

@@ -493,11 +493,6 @@ struct IntgemmViaRuy {
     }
     return result;
   }
-
-  static void PrepareBias(const float *input, float *output, Index rows, Index cols) {
-    assert(input != nullptr && output != nullptr);
-    std::memcpy(output, input, /*count=*/sizeof(float) * (1 * cols));
-  }
 };
 
 }  // namespace integer
