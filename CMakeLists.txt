@@ -215,14 +215,13 @@ else(MSVC)
   endif()
 
   # Detect support CPU instrinsics for the current platform. This will
-  # only by used with BUILD_ARCH=native. For overridden BUILD_ARCH we
-  # minimally use -msse4.1. This seems to work with MKL.
+  # only by used with BUILD_ARCH=native. 
+  include(FindSSE)
   set(INTRINSICS "")
   list(APPEND INTRINSICS_NVCC)
 
   if(BUILD_ARCH STREQUAL "native")
     message(STATUS "Checking support for CPU intrinsics")
-    include(FindSSE)
     if(SSE2_FOUND)
       message(STATUS "SSE2 support found")
       set(INTRINSICS "${INTRINSICS} -msse2")
@@ -263,7 +262,12 @@ else(MSVC)
     # -msse4.1 once marian can solely be compiled with intgemm ("onnxjs" will be removed in that case)
     set(INTRINSICS "-mssse3 -msimd128")
   else()
-    # Not assuming we have "-msse4.1 here"
+     # For overridden BUILD_ARCH we minimally use -msse4.1 (if available)
+    if(SSE4_1_FOUND)
+      message(STATUS "SSE4.1 support found")
+      set(INTRINSICS "${INTRINSICS} -msse4.1")
+      list(APPEND INTRINSICS_NVCC -Xcompiler\ -msse4.1)
+    endif(SSE4_1_FOUND)
   endif()
 
   if(USE_FBGEMM)
