@@ -461,13 +461,14 @@ public:
                                            intgemm::callbacks::UnquantizeAndWrite(unquant_mult, val_->data()));
       #else
         typedef typename intgemm_<vtype>::type Integer;
+        auto callback = marian::cpu::integer::Preprocess<marian::cpu::integer::kHighestPath>::UnquantizeAndWrite(unquant_mult);
         intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
                                    reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
                                    val_->data(), /*output*/
                                    rows(child(0)->val()),
                                    cols(child(0)->val()),
                                    cols(child(1)->val()),                                          
-                                   unquant_mult);
+                                   callback);
 
       #endif
     }};
@@ -554,14 +555,15 @@ public:
           }
       #else
         typedef typename intgemm_<vtype>::type Integer;
+        auto callback = marian::cpu::integer::Preprocess<marian::cpu::integer::kHighestPath>::UnquantizeAndAddBiasAndWrite(unquant_mult, 
+                                   child(2)->val()->data()  /*child(2) is bias*/);
         intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
                                    reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
-                                   child(2)->val()->data(),  /*child(2) is bias*/
                                    val_->data(), /*output*/
                                    rows(child(0)->val()),
                                    cols(child(0)->val()),
                                    cols(child(1)->val()),                                          
-                                   unquant_mult);
+                                   callback);
 
 
       #endif

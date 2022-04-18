@@ -72,32 +72,36 @@ struct Preprocess<Path::kStandardCpp> {
     }
   }
 
-  static void unquantizeAddBias(const int32_t *input,
-                                const float *input_bias_prepared,
-                                float unquant_multiplier,
-                                Index rows_A,
-                                Index cols_B,
-                                float *output) {
-    for(Index i = 0; i < rows_A; i++) {
-      for(Index j = 0; j < cols_B; j++) {
-        Index idx = i * cols_B + j;
-        output[idx] = (input[idx] * unquant_multiplier) + input_bias_prepared[j];
-      }
-    }
-  }
+  struct UnquantizeAndAddBiasAndWrite {
+    UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
+        : unquant_multiplier(unquant_multiplier), input_bias_prepared(input_bias_prepared) {}
 
-  static void unquantize(const int32_t *input,
-                         float unquant_multiplier,
-                         Index rows_A,
-                         Index cols_B,
-                         float *output) {
-    for(Index i = 0; i < rows_A; i++) {
-      for(Index j = 0; j < cols_B; j++) {
-        Index idx = i * cols_B + j;
-        output[idx] = (input[idx] * unquant_multiplier);
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+      for(Index i = 0; i < rows_A; i++) {
+        for(Index j = 0; j < cols_B; j++) {
+          Index idx = i * cols_B + j;
+          output[idx] = (input[idx] * unquant_multiplier) + input_bias_prepared[j];
+        }
       }
     }
-  }
+
+    float unquant_multiplier;
+    const float *input_bias_prepared;
+  };
+
+  struct UnquantizeAndWrite {
+    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier(unquant_multiplier) {}
+
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+      for(Index i = 0; i < rows_A; i++) {
+        for(Index j = 0; j < cols_B; j++) {
+          Index idx = i * cols_B + j;
+          output[idx] = (input[idx] * unquant_multiplier);
+        }
+      }
+    }
+    float unquant_multiplier;
+  };
 };
 
 #if RUY_PLATFORM_NEON
@@ -245,63 +249,68 @@ struct Preprocess<Path::kNeon> {
     // clang-format on
   }
 
-  static void unquantizeAddBias(const int32_t *input,
-                                const float *input_bias_prepared,
-                                float unquant_multiplier,
-                                Index rows_A,
-                                Index cols_B,
-                                float *output) {
-    // Set all registers in lane from same scalar value.
-    float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
-    const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
-    const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
-    float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
+  struct UnquantizeAndAddBiasAndWrite {
+    UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
+        : unquant_multiplier(unquant_multiplier), input_bias_prepared(input_bias_prepared) {}
 
-    while(Input != InputEnd) {
-      // Bias cycles every column for addition.
-      const float32x4_t *Bias = reinterpret_cast<const float32x4_t *>(input_bias_prepared);
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+      // Set all registers in lane from same scalar value.
+      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
+      const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
+      const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
+      float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
 
-      // InputEnd needs to be determined to end the while loop below.
-      const int32x4_t *RowEnd
-          = reinterpret_cast<const int32x4_t *>(reinterpret_cast<const int32_t *>(Input) + cols_B);
+      while(Input != InputEnd) {
+        // Bias cycles every column for addition.
+        const float32x4_t *Bias = reinterpret_cast<const float32x4_t *>(input_bias_prepared);
 
-      while(Input != RowEnd) {
-        // Operation happening for 4-elements together:
-        // output = [int32_t]input * [float]quant_mult + [float]bias;
-        float32x4_t floatInput = vcvtq_f32_s32(*Input++);
-        float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
-        *Output++ = vaddq_f32(unquantized, *Bias++);
+        // InputEnd needs to be determined to end the while loop below.
+        const int32x4_t *RowEnd = reinterpret_cast<const int32x4_t *>(
+            reinterpret_cast<const int32_t *>(Input) + cols_B);
+
+        while(Input != RowEnd) {
+          // Operation happening for 4-elements together:
+          // output = [int32_t]input * [float]quant_mult + [float]bias;
+          float32x4_t floatInput = vcvtq_f32_s32(*Input++);
+          float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
+          *Output++ = vaddq_f32(unquantized, *Bias++);
+        }
       }
     }
-  }
 
-  static void unquantize(const int32_t *input,
-                         float unquant_multiplier,
-                         Index rows_A,
-                         Index cols_B,
-                         float *output) {
-    // Set all registers in lane from same scalar value.
-    float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
-    const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
-    const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
-    float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
+    float unquant_multiplier;
+    const float *input_bias_prepared;
+  };
 
-    while(Input != InputEnd) {
-      // Bias cycles every column for addition.
+  struct UnquantizeAndWrite {
+    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier(unquant_multiplier) {}
 
-      // InputEnd needs to be determined to end the while loop below.
-      const int32x4_t *RowEnd
-          = reinterpret_cast<const int32x4_t *>(reinterpret_cast<const int32_t *>(Input) + cols_B);
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+      // Set all registers in lane from same scalar value.
+      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
+      const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
+      const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
+      float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
 
-      while(Input != RowEnd) {
-        // Operation happening for 4-elements together:
-        // output = [int32_t]input * [float]quant_mult + [float]bias;
-        float32x4_t floatInput = vcvtq_f32_s32(*Input++);
-        float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
-        *Output++ = unquantized;
+      while(Input != InputEnd) {
+        // Bias cycles every column for addition.
+
+        // InputEnd needs to be determined to end the while loop below.
+        const int32x4_t *RowEnd = reinterpret_cast<const int32x4_t *>(
+            reinterpret_cast<const int32_t *>(Input) + cols_B);
+
+        while(Input != RowEnd) {
+          // Operation happening for 4-elements together:
+          // output = [int32_t]input * [float]quant_mult + [float]bias;
+          float32x4_t floatInput = vcvtq_f32_s32(*Input++);
+          float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
+          *Output++ = unquantized;
+        }
       }
     }
-  }
+
+    float unquant_multiplier;
+  };
 };
 
 #endif
@@ -312,8 +321,8 @@ struct Preprocess<Path::kNeon> {
  */
 struct IntgemmViaRuy {
   // Convert compile time errors into run-time ABORTS. This allows bringing in only int8_t and
-  // select functions that are required to create a path which will run while not achieving parity
-  // with intgemm.
+  // select functions that are required to create a path which will run while not achieving
+  // parity with intgemm.
   template <class T>
   struct IntBase {
     using Type = T;
@@ -340,12 +349,14 @@ struct IntgemmViaRuy {
       ABORT("SelectColumnsB Unsupported");
     }
 
-    static void
-    Multiply(const Type *, const Type *, const float *, const float *, Index, Index, Index, float) {
-      ABORT("Multiply (A*B + bias) Unsupported");
-    }
-
-    static void Multiply(const Type *, const Type *, const float *, Index, Index, Index, float) {
+    template <class Callback>
+    static void Multiply(const Type *A_prepared,
+                         const Type *B_prepared,
+                         float *output,
+                         Index rows_A,
+                         Index width,
+                         Index cols_B,
+                         Callback callback) {
       ABORT("Multiply (A*B) Unsupported");
     }
   };
@@ -394,14 +405,14 @@ struct IntgemmViaRuy {
     // specification and there are overloads with and without bias to avoid an if inside. This
     // method corresponds to the one with bias.
     // output = A*B + bias
+    template <class Callback>
     static void Multiply(const Type *input_A_prepared,
                          const Type *input_B_prepared,
-                         const float *bias_prepared,
                          float *output,
                          Index rows_A,
                          Index width,
                          Index cols_B,
-                         float unquant_multiplier) {
+                         Callback callback) {
       // It is expected that somehow we have managed to call all prepare by the time
       // we are here, with inputs (prepared) in int8_t. All that's left to do is use
       // ruy for multiply and then start with the reverse ops to get to fp32.
@@ -435,48 +446,15 @@ struct IntgemmViaRuy {
 
       // Unquantizes, then adds bias in a single statement on the output.
       // float unquant_multiplier = (1.0f * scale_output) / (scale_A * scale_B);
-      Preprocess<kHighestPath>::unquantizeAddBias(
-          dest_ptr, bias_prepared, unquant_multiplier, rows_A, cols_B, output);
-    }
-
-    // output = A*B (notice no bias).
-    static void Multiply(const Type *input_A_prepared,
-                         const Type *input_B_prepared,
-                         float *output,
-                         Index rows_A,
-                         Index width,
-                         Index cols_B,
-                         float unquant_multiplier) {
-      // It is expected that somehow we have managed to call all prepare by the time
-      // we are here, with inputs (prepared) in int8_t. All that's left to do is use
-      // ruy for multiply and then start with the reverse ops to get to fp32.
-
-      // Use ruy to multiply.
-      // The following is adapted from
-      // https://github.com/google/ruy/blob/878283640de7946a43053e8ebf4f15114fbc9156/example/example.cc#L129-L152
-
-      ruy::Context context;
-      ruy::Matrix<std::int8_t> lhs;
-      ruy::MakeSimpleLayout(rows_A, width, ruy::Order::kRowMajor, lhs.mutable_layout());
-      lhs.set_data(input_A_prepared);
-
-      ruy::Matrix<std::int8_t> rhs;
-      ruy::MakeSimpleLayout(width, cols_B, ruy::Order::kColMajor, rhs.mutable_layout());
-      rhs.set_data(input_B_prepared);
-
-      ruy::Matrix<std::int32_t> dst;
-      ruy::MakeSimpleLayout(rows_A, cols_B, ruy::Order::kRowMajor, dst.mutable_layout());
-
-      std::int32_t *dest_ptr = reinterpret_cast<std::int32_t *>(output);
-      dst.set_data(dest_ptr);
-
-      // When Dst is int32, mul_params is unused.
-      ruy::MulParams<std::int32_t, std::int32_t> mul_params;
-      ruy::Mul(lhs, rhs, mul_params, &context, &dst);
+      // Preprocess<kHighestPath>::unquantizeAddBias(
+      //     dest_ptr, bias_prepared, unquant_multiplier, rows_A, cols_B, output);
 
       // Unquantizes, then adds bias in a single statement on the output.
       // float unquant_multiplier = (1.0f * scale_output) / (scale_A * scale_B);
-      Preprocess<kHighestPath>::unquantize(dest_ptr, unquant_multiplier, rows_A, cols_B, output);
+      // Preprocess<kHighestPath>::unquantize(dest_ptr, unquant_multiplier, rows_A, cols_B,
+      // output);
+
+      callback(dest_ptr, rows_A, cols_B, output);
     }
   };
 
