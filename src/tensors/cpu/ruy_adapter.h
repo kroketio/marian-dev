@@ -182,13 +182,6 @@ struct Preprocess<Path::kNeon> {
     };
   }
 
-  template <class Scalar>
-  static void transpose(const Scalar *input, Index rows, Index cols, Scalar *output) {
-    // This is a template with an abort. The specialized implementation is done
-    // below for int8_t.
-    std::abort();
-  }
-
   // Specialization for int8_t
   static void transpose(const int8_t *input, Index rows, Index cols, int8_t *output) {
     constexpr Index tile_size = 16;
