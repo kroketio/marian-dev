@@ -43,6 +43,7 @@ option(USE_WASM_COMPATIBLE_SOURCE "Enable the minimal marian sources that compil
 
 option(USE_SIMDE "Enable simde to target instruction sets" OFF)
 option(USE_ONNX_SGEMM "Compile with wasm compatible blas" OFF)
+option(USE_RUY_SGEMM "Compile with Ruy SGEMM" OFF)
 option(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" OFF)
 
 # cmake options that are dependent on USE_WASM_COMPATIBLE_SOURCE cmake option
@@ -573,7 +574,8 @@ if(COMPILE_CPU)
   endif(USE_INTGEMM)
 
   if(USE_RUY)
-    set(EXT_LIBS ${EXT_LIBS} ruy)
+    set(EXT_LIBS ${EXT_LIBS} ruy) 
+    add_definitions(-DUSE_RUY_SGEMM=1)
   endif(USE_RUY)
 
   add_definitions(-DCOMPILE_CPU=1)        # Move the compile CPU definition on top since we want to compile intgemm when we set compile CPU
@@ -615,6 +617,7 @@ if(COMPILE_CPU)
       endif(BLAS_FOUND)
     endif(MKL_FOUND)
   endif(USE_ONNX_SGEMM)
+
 endif(COMPILE_CPU)
 
 ###############################################################################
