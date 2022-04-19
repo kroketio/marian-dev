@@ -90,7 +90,6 @@ jobs:
             -DUSE_INTGEMM=off
             -DUSE_SIMDE=on
             -DUSE_RUY=on
-            -DUSE_ONNX_SGEMM=on # For time being.
             # -DCOMPILE_WITHOUT_EXCEPTIONS=on # Apparently this can reduce the binary size, let's see.
         )
         # Additionally list variables finally configured.
