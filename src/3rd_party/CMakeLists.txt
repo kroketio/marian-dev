@@ -27,10 +27,6 @@ if(USE_RUY)
   add_subdirectory(ruy EXCLUDE_FROM_ALL)
 endif(USE_RUY)
 
-if(USE_SIMDE)
-  include_directories(./simde-no-tests)
-endif(USE_SIMDE)
-
 if(USE_ONNX_SGEMM)
   add_subdirectory(./onnxjs)
 endif(USE_ONNX_SGEMM)

@@ -23,9 +23,9 @@
 [submodule "src/3rd_party/onnxjs"]
 	path = src/3rd_party/onnxjs
 	url = https://github.com/abhi-agg/onnxjs.git
-[submodule "src/3rd_party/simde-no-tests"]
-	path = src/3rd_party/simde-no-tests
-	url = https://github.com/simd-everywhere/simde-no-tests/
 [submodule "src/3rd_party/ruy"]
 	path = src/3rd_party/ruy
 	url = https://github.com/google/ruy
+[submodule "src/3rd_party/simd_utils"]
+	path = src/3rd_party/simd_utils
+	url = https://github.com/JishinMaster/simd_utils/
