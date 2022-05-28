@@ -74,33 +74,36 @@ struct Preprocess<Path::kStandardCpp> {
 
   struct UnquantizeAndAddBiasAndWrite {
     UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
-        : unquant_multiplier(unquant_multiplier), input_bias_prepared(input_bias_prepared) {}
+        : unquant_multiplier_(unquant_multiplier), input_bias_prepared_(input_bias_prepared) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
       for(Index i = 0; i < rows_A; i++) {
         for(Index j = 0; j < cols_B; j++) {
           Index idx = i * cols_B + j;
-          output[idx] = (input[idx] * unquant_multiplier) + input_bias_prepared[j];
+          output[idx] = (input[idx] * unquant_multiplier_) + input_bias_prepared_[j];
         }
       }
     }
 
-    float unquant_multiplier;
-    const float *input_bias_prepared;
+  private:
+    float unquant_multiplier_;
+    const float *input_bias_prepared_;
   };
 
   struct UnquantizeAndWrite {
-    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier(unquant_multiplier) {}
+    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
       for(Index i = 0; i < rows_A; i++) {
         for(Index j = 0; j < cols_B; j++) {
           Index idx = i * cols_B + j;
-          output[idx] = (input[idx] * unquant_multiplier);
+          output[idx] = (input[idx] * unquant_multiplier_);
         }
       }
     }
-    float unquant_multiplier;
+
+  private:
+    float unquant_multiplier_;
   };
 };
 
@@ -251,18 +254,18 @@ struct Preprocess<Path::kNeon> {
 
   struct UnquantizeAndAddBiasAndWrite {
     UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
-        : unquant_multiplier(unquant_multiplier), input_bias_prepared(input_bias_prepared) {}
+        : unquant_multiplier_(unquant_multiplier), input_bias_prepared_(input_bias_prepared) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
       // Set all registers in lane from same scalar value.
-      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
+      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
       const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
       const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
       float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
 
       while(Input != InputEnd) {
         // Bias cycles every column for addition.
-        const float32x4_t *Bias = reinterpret_cast<const float32x4_t *>(input_bias_prepared);
+        const float32x4_t *Bias = reinterpret_cast<const float32x4_t *>(input_bias_prepared_);
 
         // InputEnd needs to be determined to end the while loop below.
         const int32x4_t *RowEnd = reinterpret_cast<const int32x4_t *>(
@@ -278,16 +281,17 @@ struct Preprocess<Path::kNeon> {
       }
     }
 
-    float unquant_multiplier;
-    const float *input_bias_prepared;
+  private:
+    float unquant_multiplier_;
+    const float *input_bias_prepared_;
   };
 
   struct UnquantizeAndWrite {
-    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier(unquant_multiplier) {}
+    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
       // Set all registers in lane from same scalar value.
-      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
+      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
       const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
       const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
       float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
@@ -309,7 +313,8 @@ struct Preprocess<Path::kNeon> {
       }
     }
 
-    float unquant_multiplier;
+  private:
+    float unquant_multiplier_;
   };
 };
 
