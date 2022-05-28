@@ -288,7 +288,7 @@ struct Preprocess<Path::kNeon> {
   };
 
   struct UnquantizeAndWrite {
-    explicit tUnquantizeAndWrite(float unquant_multiplier)
+    explicit UnquantizeAndWrite(float unquant_multiplier)
         : unquant_multiplier_(unquant_multiplier) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
