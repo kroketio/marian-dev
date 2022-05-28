@@ -80,15 +80,18 @@ inline void GemmRuy(const bool transA,
     ruy::MulParams<float, float> mul_params;
     ruy::Mul(lhs, rhs, mul_params, &context, &dst);
 
-    // Write out C as C = alpha * [op(A) * op(B)] + beta * C
-    // Can we expect the compiler to autovectorize this?
-    // TODO: Come back and explicitly use SIMD.
-    const size_t size    = M * N;
-    const float *opA_opB = C;  // Alias.
+    if(alpha != 1.0) {
+        // Write out C as C = alpha * [op(A) * op(B)] + beta * C
+        // Can we expect the compiler to autovectorize this?
+        // TODO: Come back and explicitly use SIMD.
+        const size_t size    = M * N;
+        const float *opA_opB = C;  // Alias.
 #pragma clang loop vectorize(enable) interleave(enable)
-    for(size_t i = 0; i < size; i++) {
-      C[i] = alpha * opA_opB[i];
+        for(size_t i = 0; i < size; i++) {
+          C[i] = alpha * opA_opB[i];
+        }
     }
+
   } else {
     // @jerinphilip has not yet been able to find a ruy primitive that does in
     // place addition to obtain full gemm.
