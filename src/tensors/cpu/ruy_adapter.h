@@ -91,7 +91,8 @@ struct Preprocess<Path::kStandardCpp> {
   };
 
   struct UnquantizeAndWrite {
-    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
+    explicit UnquantizeAndWrite(float unquant_multiplier)
+        : unquant_multiplier_(unquant_multiplier) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
       for(Index i = 0; i < rows_A; i++) {
@@ -287,7 +288,8 @@ struct Preprocess<Path::kNeon> {
   };
 
   struct UnquantizeAndWrite {
-    UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
+    explicit tUnquantizeAndWrite(float unquant_multiplier)
+        : unquant_multiplier_(unquant_multiplier) {}
 
     void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
       // Set all registers in lane from same scalar value.
