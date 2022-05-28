@@ -76,7 +76,7 @@ struct Preprocess<Path::kStandardCpp> {
     UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
         : unquant_multiplier_(unquant_multiplier), input_bias_prepared_(input_bias_prepared) {}
 
-    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
       for(Index i = 0; i < rows_A; i++) {
         for(Index j = 0; j < cols_B; j++) {
           Index idx = i * cols_B + j;
@@ -93,7 +93,7 @@ struct Preprocess<Path::kStandardCpp> {
   struct UnquantizeAndWrite {
     UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
 
-    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
       for(Index i = 0; i < rows_A; i++) {
         for(Index j = 0; j < cols_B; j++) {
           Index idx = i * cols_B + j;
@@ -256,7 +256,7 @@ struct Preprocess<Path::kNeon> {
     UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
         : unquant_multiplier_(unquant_multiplier), input_bias_prepared_(input_bias_prepared) {}
 
-    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
       // Set all registers in lane from same scalar value.
       float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
       const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
@@ -289,7 +289,7 @@ struct Preprocess<Path::kNeon> {
   struct UnquantizeAndWrite {
     UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
 
-    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) {
+    void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
       // Set all registers in lane from same scalar value.
       float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
       const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
