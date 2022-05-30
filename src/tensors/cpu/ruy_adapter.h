@@ -299,8 +299,6 @@ struct Preprocess<Path::kNeon> {
       float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
 
       while(Input != InputEnd) {
-        // Bias cycles every column for addition.
-
         // InputEnd needs to be determined to end the while loop below.
         const int32x4_t *RowEnd = reinterpret_cast<const int32x4_t *>(
             reinterpret_cast<const int32_t *>(Input) + cols_B);
