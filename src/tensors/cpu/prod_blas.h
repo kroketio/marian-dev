@@ -86,7 +86,6 @@ inline void GemmRuy(const bool transA,
         // TODO: Come back and explicitly use SIMD.
         const size_t size    = M * N;
         const float *opA_opB = C;  // Alias.
-#pragma clang loop vectorize(enable) interleave(enable)
         for(size_t i = 0; i < size; i++) {
           C[i] = alpha * opA_opB[i];
         }
@@ -111,7 +110,6 @@ inline void GemmRuy(const bool transA,
     // TODO: Come back and explicitly use SIMD.
     const size_t size    = M * N;
     const float *opA_opB = intermediate.data();
-#pragma clang loop vectorize(enable) interleave(enable)
     for(size_t i = 0; i < size; i++) {
       C[i] = alpha * opA_opB[i] + beta * C[i];
     }
