@@ -31,7 +31,8 @@ option(USE_CCACHE "Use ccache compiler cache (https://ccache.dev)" OFF)
 option(USE_CUDNN "Use CUDNN library" OFF)
 option(USE_DOXYGEN "Build documentation with Doxygen" ON)
 option(USE_FBGEMM "Use FBGEMM" OFF)
-option(USE_INTGEMM "Use INTGEMM" ON)
+option(USE_INTGEMM "Use INTGEMM" OFF)
+option(USE_RUY "Use Ruy" OFF)
 option(USE_MKL "Compile with MKL support" ON)
 option(USE_MPI "Use MPI library" OFF)
 option(USE_NCCL "Use NCCL library" ON)
@@ -49,6 +50,15 @@ option(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" OFF)
 # cmake options that are dependent on USE_WASM_COMPATIBLE_SOURCE cmake option
 CMAKE_DEPENDENT_OPTION(USE_THREADS "Compile with multi-threading support" OFF
                        "USE_WASM_COMPATIBLE_SOURCE" ON)
+
+
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64 OR CMAKE_SYSTEM_PROCESSOR STREQUAL amd64)
+    set(USE_INTGEMM ON)
+else() 
+    set(USE_RUY ON)
+    set(USE_RUY_SGEMM ON)
+    set(USE_SIMD_UTILS ON)
+endif()
 
 if (USE_WASM_COMPATIBLE_SOURCE)
   set(SPM_BUILD_LIBRARY_ONLY ON CACHE BOOL "Build only sentencepiece library (skip building executables)")
