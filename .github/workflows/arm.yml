@@ -87,9 +87,6 @@ jobs:
             -DCMAKE_USE_PTHREADS_INIT=1
             -DTHREADS_PREFER_PTHREAD_FLAG=ON
             -DBUILD_ARCH=armv8-a
-            -DUSE_INTGEMM=off
-            -DUSE_SIMD_UTILS=on
-            -DUSE_RUY=on
             # -DCOMPILE_WITHOUT_EXCEPTIONS=on # Apparently this can reduce the binary size, let's see.
         )
         # Additionally list variables finally configured.
