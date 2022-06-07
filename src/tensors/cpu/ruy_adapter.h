@@ -431,13 +431,9 @@ struct IntgemmViaRuy {
       ruy::MakeSimpleLayout(rows_A, width, ruy::Order::kRowMajor, lhs.mutable_layout());
       lhs.set_data(input_A_prepared);
 
-      // PRINT_MATRIX_DEBUG(input_A_prepared, rows_A, width, Order::RowMajor);
-
       ruy::Matrix<std::int8_t> rhs;
       ruy::MakeSimpleLayout(width, cols_B, ruy::Order::kColMajor, rhs.mutable_layout());
       rhs.set_data(input_B_prepared);
-
-      // PRINT_MATRIX_DEBUG(input_B_prepared, width, cols_B, Order::ColMajor);
 
       ruy::Matrix<std::int32_t> dst;
       ruy::MakeSimpleLayout(rows_A, cols_B, ruy::Order::kRowMajor, dst.mutable_layout());
