@@ -325,10 +325,6 @@ struct Preprocess<Path::kNeon> {
  * intgemm_interface.h diff minimal. There are possibly better abstractions.
  */
 struct IntgemmViaRuy {
-  // Convert compile time errors into run-time ABORTS. This allows bringing in only int8_t and
-  // select functions that are required to create a path which will run while not achieving
-  // parity with intgemm.
-
   // Intgemm nomenclature expects Int8. Missing functions are ABORTs.
   struct Int8 {
     using Type = int8_t;
