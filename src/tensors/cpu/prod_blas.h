@@ -51,7 +51,6 @@ inline void GemmRuy(const bool transA,
                     const float beta,
                     float *C,
                     const int ldc) {
-  LOG(info, "Ruy multiplication called...");
   ruy::Context context;
 
   // If we need to transpose, we can swap dimensions in layout claim the matrix
