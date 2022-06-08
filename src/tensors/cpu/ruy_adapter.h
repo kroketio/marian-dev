@@ -328,46 +328,9 @@ struct IntgemmViaRuy {
   // Convert compile time errors into run-time ABORTS. This allows bringing in only int8_t and
   // select functions that are required to create a path which will run while not achieving
   // parity with intgemm.
-  template <class T>
-  struct IntBase {
-    using Type = T;
-    static void Quantize(const float *, Type *, float, Index) { ABORT("Quantize unsupported"); }
-
-    static void PrepareA(const float *input,
-                         Type *output,
-                         float quant_mult,
-                         Index rows,
-                         Index cols) {
-      ABORT("PrepareA Unsupported");
-    }
-
-    static void PrepareB(const float *, Type *, float, Index, Index) {
-      ABORT("PrepareB Unsupported");
-    }
-    static void PrepareBQuantizedTransposed(const Type *, Type *, Index, Index) {
-      ABORT("PrepareBQuantizedTransposed Unsupported");
-    }
-    static void PrepareBTransposed(const float *, Type *, float, Index, Index) {
-      ABORT("PrepareBTransposed Unsupported");
-    }
-    static void SelectColumnsB(const Type *, Type *, Index, const Index *, const Index *) {
-      ABORT("SelectColumnsB Unsupported");
-    }
-
-    template <class Callback>
-    static void Multiply(const Type *A_prepared,
-                         const Type *B_prepared,
-                         float *output,
-                         Index rows_A,
-                         Index width,
-                         Index cols_B,
-                         Callback callback) {
-      ABORT("Multiply (A*B) Unsupported");
-    }
-  };
 
   // Intgemm nomenclature expects Int8. Missing functions are ABORTs.
-  struct Int8 : IntBase<int8_t> {
+  struct Int8 {
     using Type = int8_t;
     static void PrepareBQuantizedTransposed(const Type *input,
                                             Type *output,
@@ -382,6 +345,10 @@ struct IntgemmViaRuy {
                                    Index rows,
                                    Index cols) {
       Preprocess<kHighestPath>::quantize(input, output, quant_mult, rows, cols);
+    }
+
+    static void PrepareB(const float *, Type *, float, Index, Index) {
+      ABORT("PrepareB Unsupported");
     }
 
     static void PrepareA(const float *input,
@@ -450,8 +417,41 @@ struct IntgemmViaRuy {
   };
 
   // Int16 support is currently missing.
-  struct Int16 : IntBase<int16_t> {
+  struct Int16 {
     using Type = int16_t;
+    static void Quantize(const float *, Type *, float, Index) { ABORT("Quantize unsupported"); }
+
+    static void PrepareA(const float *input,
+                         Type *output,
+                         float quant_mult,
+                         Index rows,
+                         Index cols) {
+      ABORT("PrepareA Unsupported");
+    }
+
+    static void PrepareB(const float *, Type *, float, Index, Index) {
+      ABORT("PrepareB Unsupported");
+    }
+    static void PrepareBQuantizedTransposed(const Type *, Type *, Index, Index) {
+      ABORT("PrepareBQuantizedTransposed Unsupported");
+    }
+    static void PrepareBTransposed(const float *, Type *, float, Index, Index) {
+      ABORT("PrepareBTransposed Unsupported");
+    }
+    static void SelectColumnsB(const Type *, Type *, Index, const Index *, const Index *) {
+      ABORT("SelectColumnsB Unsupported");
+    }
+
+    template <class Callback>
+    static void Multiply(const Type *A_prepared,
+                         const Type *B_prepared,
+                         float *output,
+                         Index rows_A,
+                         Index width,
+                         Index cols_B,
+                         Callback callback) {
+      ABORT("Multiply (A*B) Unsupported");
+    }
   };
 
   template <class T>
