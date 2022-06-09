@@ -72,6 +72,24 @@ else()
   set(USE_INTGEMM ON)
 endif()
 
+if(USE_FBGEMM)
+  set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
+  add_compile_definitions(USE_FBGEMM=1)
+endif(USE_FBGEMM)
+
+if(USE_INTGEMM)
+  add_compile_defintions(USE_INTGEMM=1)
+endif(USE_INTGEMM)
+
+if(USE_SIMD_UTILS)
+  add_compile_definitions(ARM SSE) #added for ARM
+  if(MSVC)
+    add_compile_options(/flax-vector-conversions)
+  else(MSVC)
+    add_compile_options(-flax-vector-conversions)
+  endif(MSVC)
+endif(USE_SIMD_UTILS)
+
 if (USE_WASM_COMPATIBLE_SOURCE)
   set(SPM_BUILD_LIBRARY_ONLY ON CACHE BOOL "Build only sentencepiece library (skip building executables)")
   add_compile_definitions(WASM_COMPATIBLE_SOURCE)
@@ -355,19 +373,6 @@ else(MSVC)
   endif(COMPILE_WASM)
 endif(MSVC)
 
-if(USE_FBGEMM)
-  set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_FBGEMM=1")
-endif(USE_FBGEMM)
-
-if(USE_INTGEMM)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_INTGEMM=1")
-endif(USE_INTGEMM)
-
-if(USE_SIMD_UTILS)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DARM -DSSE -flax-vector-conversions") #added for ARM
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DARM -DSSE -flax-vector-conversions") #added for ARM
-endif(USE_SIMD_UTILS)
 
 # with gcc 7.0 and above we need to mark fallthrough in switch case statements
 # that can be done in comments for backcompat, but CCACHE removes comments.
