@@ -56,7 +56,6 @@ option(COMPILE_WASM "Compile (wasm compatible) marian for WASM target" OFF)
 option(USE_WASM_COMPATIBLE_SOURCE "Enable the minimal marian sources that compile to wasm. Useful for debugging wasm failures by building same sources natively" OFF)
 
 option(USE_SIMD_UTILS "Enable simde to target instruction sets" OFF)
-option(USE_ONNX_SGEMM "Compile with wasm compatible blas" OFF)
 option(USE_RUY_SGEMM "Compile with Ruy SGEMM" OFF)
 option(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" OFF)
 
