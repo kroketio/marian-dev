@@ -606,9 +606,7 @@ if(COMPILE_CPU)
     ## ^ SGEMM != BLAS
     set(EXT_LIBS ${EXT_LIBS} onnx-sgemm)
     add_definitions(-DUSE_ONNX_SGEMM=1) # Might be required in some cmake files further down the line, let's avoid using add_compile_definitions in this codeblock
-  endif(USE_ONNX_SGEMM)
-
-  if(APPLE AND USE_APPLE_ACCELERATE)
+  elseif(APPLE AND USE_APPLE_ACCELERATE)
     set(BLAS_VENDOR "Accelerate")
     # see https://developer.apple.com/documentation/accelerate for more info
     # you may need to install Xcode command line tools if you don't have them already (https://developer.apple.com/xcode/features/)
