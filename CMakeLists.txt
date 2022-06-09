@@ -286,18 +286,6 @@ else(MSVC)
     endif ()
   endif()
 
-  if(USE_FBGEMM)
-    set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
-    add_definitions(-DUSE_FBGEMM=1)
-  endif(USE_FBGEMM)
-
-  if(USE_INTGEMM)
-    add_definitions(-DUSE_INTGEMM=1)
-  endif(USE_INTGEMM)
-
-  if(USE_SIMD_UTILS)
-    add_definitions(-DARM -DSSE -flax-vector-conversions) #added for ARM
-  endif(USE_SIMD_UTILS)
 
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
     # Clang-10.0.0 complains when CUDA is newer than 10.1
@@ -366,6 +354,20 @@ else(MSVC)
     set(CMAKE_C_FLAGS_PROFUSE         "${CMAKE_C_FLAGS_RELWITHDEBINFO} -fprofile-use -fprofile-correction")
   endif(COMPILE_WASM)
 endif(MSVC)
+
+if(USE_FBGEMM)
+  set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_FBGEMM=1")
+endif(USE_FBGEMM)
+
+if(USE_INTGEMM)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_INTGEMM=1")
+endif(USE_INTGEMM)
+
+if(USE_SIMD_UTILS)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DARM -DSSE -flax-vector-conversions") #added for ARM
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DARM -DSSE -flax-vector-conversions") #added for ARM
+endif(USE_SIMD_UTILS)
 
 # with gcc 7.0 and above we need to mark fallthrough in switch case statements
 # that can be done in comments for backcompat, but CCACHE removes comments.
