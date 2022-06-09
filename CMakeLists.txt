@@ -63,6 +63,10 @@ option(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" OFF)
 # cmake options that are dependent on USE_WASM_COMPATIBLE_SOURCE cmake option
 CMAKE_DEPENDENT_OPTION(USE_THREADS "Compile with multi-threading support" OFF
                        "USE_WASM_COMPATIBLE_SOURCE" ON)
+CMAKE_DEPENDENT_OPTION(USE_ONNX_SGEMM "Compile with wasm compatible blas" ON
+                       "USE_WASM_COMPATIBLE_SOURCE" OFF)
+CMAKE_DEPENDENT_OPTION(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" ON
+                       "USE_WASM_COMPATIBLE_SOURCE" OFF)
 
 if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
   set(USE_RUY ON)
@@ -85,13 +89,12 @@ if(USE_SIMD_UTILS)
   endif(MSVC)
 endif(USE_SIMD_UTILS)
 
+
 if (USE_WASM_COMPATIBLE_SOURCE)
   set(SPM_BUILD_LIBRARY_ONLY ON CACHE BOOL "Build only sentencepiece library (skip building executables)")
   add_compile_definitions(WASM_COMPATIBLE_SOURCE)
   # Setting USE_SSE2 definition to enable SSE2 specific code in "3rd_party/sse_mathfun.h" for wasm builds
   add_compile_definitions(USE_SSE2)
-  set(USE_ONNX_SGEMM ON CACHE BOOL "Use ONNX SGEMM (for WebAssembly)")
-  set(COMPILE_WITHOUT_EXCEPTIONS ON CACHE BOOL "Compile without Exceptions")
 endif()
 
 if (COMPILE_WASM)
