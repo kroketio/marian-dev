@@ -72,11 +72,6 @@ else()
   set(USE_INTGEMM ON)
 endif()
 
-if(USE_FBGEMM)
-  set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
-  add_compile_definitions(USE_FBGEMM=1)
-endif(USE_FBGEMM)
-
 if(USE_INTGEMM)
   add_compile_definitions(USE_INTGEMM=1)
 endif(USE_INTGEMM)
@@ -211,7 +206,6 @@ if(MSVC)
   # set(INTRINSICS "/arch:AVX")
   add_definitions(-DUSE_SSE2=1)
 
-
   # Or maybe use these?
   set(INTRINSICS ${MSVC_BUILD_ARCH})
   # set(INTRINSICS "/arch:AVX512")
@@ -238,13 +232,7 @@ if(MSVC)
     set(EXT_LIBS ${EXT_LIBS} fbgemm)
     add_definitions(-DUSE_FBGEMM=1 -DFBGEMM_STATIC=1)
   endif(USE_FBGEMM)
-
-  if(USE_INTGEMM)
-    add_definitions(-DUSE_INTGEMM=1)
-  endif(USE_INTGEMM)
-
 else(MSVC)
-
   # Check we are using at least g++ 5.0
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5.0)
     message(FATAL_ERROR "FATAL ERROR: Compiling Marian requires at least g++ 5.0, your version is ${CMAKE_CXX_COMPILER_VERSION}")
@@ -304,6 +292,10 @@ else(MSVC)
     endif ()
   endif()
 
+  if(USE_FBGEMM)
+    set(EXT_LIBS ${EXT_LIBS} fbgemm dl)
+    add_compile_definitions(USE_FBGEMM=1)
+  endif(USE_FBGEMM)
 
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9.0)
     # Clang-10.0.0 complains when CUDA is newer than 10.1
@@ -600,7 +592,7 @@ if(COMPILE_CPU)
 
   if(USE_RUY)
     set(EXT_LIBS ${EXT_LIBS} ruy) 
-    add_definitions(-DUSE_RUY_SGEMM=1)
+    add_compile_definitions(USE_RUY_SGEMM=1)
   endif(USE_RUY)
 
   add_definitions(-DCOMPILE_CPU=1)        # Move the compile CPU definition on top since we want to compile intgemm when we set compile CPU
