@@ -78,7 +78,7 @@ if(USE_FBGEMM)
 endif(USE_FBGEMM)
 
 if(USE_INTGEMM)
-  add_compile_defintions(USE_INTGEMM=1)
+  add_compile_definitions(USE_INTGEMM=1)
 endif(USE_INTGEMM)
 
 if(USE_SIMD_UTILS)
