@@ -14,19 +14,19 @@ set(archdetect_c_code "
         || defined(__ARM_ARCH_8M__) || defined(__ARM_ARCH_8M)         \\
         || (defined(__TARGET_ARCH_ARM) && __TARGET_ARCH_ARM-0 >= 8)
         #error cmake_ARCH armv8
-    #elif defined(__ARM_ARCH_7__)   || defined(__ARM_ARCH_7)          \\
-        || defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_7A__)       \\
-        || defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7R__)       \\
-        || defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7M__)       \\
+    #elif defined(__ARM_ARCH_7__)                                     \\
+        || defined(__ARM_ARCH_7A__)                                   \\
+        || defined(__ARM_ARCH_7R__)                                   \\
+        || defined(__ARM_ARCH_7M__)                                   \\
         || (defined(__TARGET_ARCH_ARM) && __TARGET_ARCH_ARM-0 >= 7)
         #error cmake_ARCH armv7
-    #elif defined(__ARM_ARCH_6__)    || defined(__ARM_ARCH_6)         \\
-        || defined(__ARM_ARCH_6J__)  || defined(__ARM_ARCH_6J__)      \\
-        || defined(__ARM_ARCH_6T2__) || defined(__ARM_ARCH_6T2__)     \\
-        || defined(__ARM_ARCH_6Z__)  || defined(__ARM_ARCH_6Z__)      \\
-        || defined(__ARM_ARCH_6K__)  || defined(__ARM_ARCH_6K__)      \\
-        || defined(__ARM_ARCH_6ZK__) || defined(__ARM_ARCH_6ZK__)     \\
-        || defined(__ARM_ARCH_6M__)  || defined(__ARM_ARCH_6M__)      \\
+    #elif defined(__ARM_ARCH_6__)                                      \\
+        || defined(__ARM_ARCH_6J__)                                    \\
+        || defined(__ARM_ARCH_6T2__)                                   \\
+        || defined(__ARM_ARCH_6Z__)                                    \\
+        || defined(__ARM_ARCH_6K__)                                    \\
+        || defined(__ARM_ARCH_6ZK__)                                   \\
+        || defined(__ARM_ARCH_6M__)                                    \\
         || (defined(__TARGET_ARCH_ARM) && __TARGET_ARCH_ARM-0 >= 6)
         #error cmake_ARCH armv6
     #elif defined(__ARM_ARCH_5TEJ__) \\
