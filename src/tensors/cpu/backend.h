@@ -80,6 +80,7 @@ public:
 
   void setShifted(bool shifted) override { 
 #if (defined(__arm__) || defined(__aarch64__))
+      LOG(info, "gemm-precision: *shifted* is not available on ARM; Setting to false.");
       shifted_ = false;
 #else
       shifted_ = shifted; 
@@ -89,6 +90,7 @@ public:
 
   void setShiftedAll(bool shiftedAll) override {
 #if (defined(__arm__) || defined(__aarch64__))
+      LOG(info, "gemm-precision: *shifted* is not available on ARM; Setting to false.");
       shiftedAll_ = false;
       shifted_ = false;
 #else
