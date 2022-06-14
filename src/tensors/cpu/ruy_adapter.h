@@ -22,21 +22,10 @@ namespace integer {
 
 using Index = unsigned int;
 
-// The following partitions a pure C++ slow implementation and a faster SIMD implementation using
-// NEON intrinsics on ARM hardware. Ruy already has such a routing, but we add some preprocessing
-// and postprocessing functions (quantize, transpose, unquantize) that are outside ruy's offerings
-// and required in the fast matrix-multiplication workflow for machine-translation, that exists in
-// marian.
-
-/*
- * Naive implementation using standard C++ functions. Not optimized using SIMD operations.
- */
-
 #if RUY_PLATFORM_NEON
 
 /*
  * Optimized path using ARM NEON SIMD intrinsics. Currently only supports int8_t.
- * TODO: Expand support to 16-bit.
  */
 inline void quantize(const float *input, int8_t *output, float scale, Index rows, Index width) {
   const float32x4_t *Input = reinterpret_cast<const float32x4_t *>(input);
