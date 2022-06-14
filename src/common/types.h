@@ -173,15 +173,22 @@ struct intgemm8 {
 
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
+// The following struct fills this structure for ARM with NEON SIMD, changing
+// __m128 and _mm_set1_ps with the equivalents on ARM-NEON.
 struct float32x4 {
 private:
+    // NEON uses 128-bit SIMD registers, same as SSE. We are copying this class
+    // and locally aliasing __m128 to float32x4_t, which is the NEON
+    // equivalent.
    using __m128 = float32x4_t;
   __m128 f_;
 
 public:
   float32x4() {}
   float32x4(const __m128& f) : f_(f) {}
-  float32x4(const float& f) : f_(vdupq_n_f32(f)) {} // __m128 _mm_set1_ps(float) copies value into all slots
+  // __m128 _mm_set1_ps(float) copies value into all slots, vdupq_n_f32 is it's
+  // NEON equivalent.
+  float32x4(const float& f) : f_(vdupq_n_f32(f)) {} 
 
   operator const __m128&() const { return f_; }
   operator __m128&() { return f_; }
