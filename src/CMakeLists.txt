@@ -101,7 +101,6 @@ set(MARIAN_SOURCES
 )
 
 if (NOT USE_WASM_COMPATIBLE_SOURCE AND NOT ANDROID)
-  # Hi WASM, Android hates this too.
   list(APPEND MARIAN_SOURCES
     3rd_party/ExceptionWithCallStack.cpp
   )
