@@ -80,7 +80,9 @@ if(USE_INTGEMM)
 endif(USE_INTGEMM)
 
 if(USE_SIMD_UTILS)
-  add_compile_definitions(ARM FMA SSE) #added for ARM
+  if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
+    add_compile_definitions(ARM FMA SSE) #added for ARM
+  endif()
   if(MSVC)
     add_compile_options(/flax-vector-conversions)
   else(MSVC)
