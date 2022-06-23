@@ -128,11 +128,14 @@ static void setErrorHandlers() {
   std::set_terminate(unhandledException);
 #ifdef __unix__
   // catch segfaults
-#ifdef WASM_COMPATIBLE_SOURCE
+// Emscripten uses Clang/LLVM as its underlying codegen compiler, so the
+// preprocessor defines __llvm__ and __clang__ are defined.
+// Exists to appease -Werror gods.
+#ifdef __clang__
   struct sigaction sa = {{ 0 }};
-#else // WASM_COMPATIBLE_SOURCE
+#else // __clang__
   struct sigaction sa = { 0 };
-#endif // WASM_COMPATIBLE_SOURCE
+#endif // __clang__
   sigemptyset(&sa.sa_mask);
   sa.sa_flags = SA_SIGINFO;
   sa.sa_sigaction = [](int /*signal*/, siginfo_t*, void*) { ABORT("Segmentation fault"); };
