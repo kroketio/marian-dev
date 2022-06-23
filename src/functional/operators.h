@@ -214,7 +214,10 @@ struct Ops<double> {
 #ifndef __CUDACC__
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #include "3rd_party/simd_utils/simd_utils.h"
+#pragma GCC diagnostic pop
 #else
 #include "3rd_party/sse_mathfun.h"
 #endif

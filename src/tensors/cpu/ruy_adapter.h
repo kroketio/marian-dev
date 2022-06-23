@@ -9,8 +9,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcomment"
 #include "ruy/platform.h"
 #include "ruy/system_aligned_alloc.h"
+#pragma GCC diagnostic pop
 
 #if RUY_PLATFORM_NEON
 #include <arm_neon.h>

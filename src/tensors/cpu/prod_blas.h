@@ -6,8 +6,11 @@
 #elif USE_ONNX_SGEMM
     #include "3rd_party/onnxjs/src/wasm-ops/gemm.h"
 #elif USE_RUY_SGEMM
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcomment"
     #include "ruy/ruy.h"
     #include "ruy/system_aligned_alloc.h"
+#pragma GCC pop
 #endif
 
 #if USE_RUY_SGEMM

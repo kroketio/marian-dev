@@ -7,7 +7,11 @@
 #ifdef USE_INTGEMM
 #include "3rd_party/intgemm/intgemm/intgemm.h"
 #else // USE_INTGEMM
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
 #include <ruy/ruy.h>
+#pragma GCC diagnostic pop
+
 #include "ruy_adapter.h"
 #endif // USE_INTGEMM
 #if defined(WASM)
