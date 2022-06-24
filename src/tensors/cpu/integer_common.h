@@ -8,7 +8,7 @@
 #include "3rd_party/intgemm/intgemm/intgemm.h"
 #else // USE_INTGEMM
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wcomment"
 #include <ruy/ruy.h>
 #pragma GCC diagnostic pop
 
