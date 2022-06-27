@@ -69,7 +69,12 @@ CMAKE_DEPENDENT_OPTION(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" O
 
 if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
   set(USE_RUY ON)
-  set(USE_RUY_SGEMM ON)
+
+  # Apple M1 has Apple Accelerate(?).
+  if(NOT APPLE)
+    set(USE_RUY_SGEMM ON)
+  endif(NOT APPLE)
+
   set(USE_SIMD_UTILS ON)
 else()
   set(USE_INTGEMM ON)
@@ -593,9 +598,8 @@ if(COMPILE_CPU)
       set(EXT_LIBS ${EXT_LIBS} intgemm)       # Move the intgemm bits on top since they compile with every single variant
   endif(USE_INTGEMM)
 
-  if(USE_RUY)
+  if(USE_RUY OR USE_RUY_SGEMM)
     set(EXT_LIBS ${EXT_LIBS} ruy) 
-    add_compile_definitions(USE_RUY_SGEMM=1)
   endif(USE_RUY)
 
   add_definitions(-DCOMPILE_CPU=1)        # Move the compile CPU definition on top since we want to compile intgemm when we set compile CPU
@@ -613,6 +617,8 @@ if(COMPILE_CPU)
     include_directories("/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Frameworks/vecLib.framework/Headers")
     set(EXT_LIBS ${EXT_LIBS} "-framework Accelerate")
     add_definitions(-DBLAS_FOUND=1)
+  elseif(USE_RUY_SGEMM)
+    add_compile_definitions(USE_RUY_SGEMM=1)
   else(USE_ONNX_SGEMM)
     if(USE_MKL)
       find_package(MKL)
