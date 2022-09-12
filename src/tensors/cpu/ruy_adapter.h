@@ -324,6 +324,76 @@ struct IntgemmViaRuy {
     }
   };
 
+    static void Multiply(const Type *input_A_prepared,
+                         const Type *input_B_prepared,
+                         float *output,
+                         Index rows_A,
+                         Index width,
+                         Index cols_B,
+                         float unquant_multiplier,
+                         float * bias=nullptr) {
+      // It is expected that somehow we have managed to call all prepare by the time
+      // we are here, with inputs (prepared) in int8_t. All that's left to do is use
+      // ruy for multiply and then start with the reverse ops to get to fp32.
+
+      // Use ruy to multiply.
+      // The following is adapted from
+      // https://github.com/google/ruy/blob/878283640de7946a43053e8ebf4f15114fbc9156/example/example.cc#L129-L152
+
+      ruy::Context context;
+      ruy::Matrix<std::int8_t> lhs;
+      ruy::MakeSimpleLayout(rows_A, width, ruy::Order::kRowMajor, lhs.mutable_layout());
+      lhs.set_data(input_A_prepared);
+
+      ruy::Matrix<std::int8_t> rhs;
+      ruy::MakeSimpleLayout(width, cols_B, ruy::Order::kColMajor, rhs.mutable_layout());
+      rhs.set_data(input_B_prepared);
+
+      ruy::Matrix<std::int32_t> dst;
+      ruy::MakeSimpleLayout(rows_A, cols_B, ruy::Order::kRowMajor, dst.mutable_layout());
+
+      std::int32_t *dest_ptr = reinterpret_cast<std::int32_t *>(output);
+      dst.set_data(dest_ptr);
+
+      // When Dst is int32, mul_params is unused.
+      ruy::MulParams<std::int32_t, std::int32_t> mul_params;
+      ruy::Mul(lhs, rhs, mul_params, &context, &dst);
+
+      // Unquantise:
+      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
+
+      if (!bias) {
+        for (Index i = 0; i < rows_A*cols_B; i+=4) {
+          float32x4_t *inout = reinterpret_cast<const int32x4_t *>(output[i]);
+          inout = vmulq_f32(vcvtq_f32_s32(inout), multiplier);
+        }
+      } else {
+        for (Index i = 0; i < cols_B; i+=4) {
+          float32x4_t *bias = reinterpret_cast<const int32x4_t *>(output[i]);
+          for (Index j = 0; j < rows_A; j+=4) {
+            float32x4_t *inout = reinterpret_cast<const int32x4_t *>(output[i*rows_A + j]);
+            inout = vaddq_f32(vmulq_f32(vcvtq_f32_s32(inout), multiplier), bias);
+          }
+        }
+      }
+    
+
+    while(Input != InputEnd) {
+      // InputEnd needs to be determined to end the while loop below.
+      const int32x4_t *RowEnd
+          = reinterpret_cast<const int32x4_t *>(reinterpret_cast<const int32_t *>(Input) + cols_B);
+
+      while(Input != RowEnd) {
+        // Operation happening for 4-elements together:
+        // output = [int32_t]input * [float]quant_mult + [float]bias;
+        float32x4_t floatInput = vcvtq_f32_s32(*Input++);
+        float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
+        *Output++ = unquantized;
+      }
+    }
+      }
+  }
+
   // Int16 support is currently missing.
   struct Int16 {
     using Type = int16_t;
