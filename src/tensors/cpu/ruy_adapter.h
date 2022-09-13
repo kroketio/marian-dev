@@ -255,15 +255,16 @@ struct IntgemmViaRuy {
       quantize(input, output, quant_mult, rows, cols);
     }
 
-    static void PrepareB(const float *, Type *, float, Index, Index) {
-      ABORT("PrepareB Unsupported");
-    }
 
     static void PrepareA(const float *input,
                          int8_t *output,
                          float quant_mult,
                          Index rows,
                          Index cols) {
+      quantize(input, output, quant_mult, rows, cols);
+    }
+
+    static void PrepareB(const float * input, int8_t * output, float quant_mult, Index rows, Index cols) {
       quantize(input, output, quant_mult, rows, cols);
     }
 
@@ -324,8 +325,8 @@ struct IntgemmViaRuy {
     }
   };
 
-    static void Multiply(const Type *input_A_prepared,
-                         const Type *input_B_prepared,
+    static void Multiply(const int8_t *input_A_prepared,
+                         const int8_t *input_B_prepared,
                          float *output,
                          Index rows_A,
                          Index width,
@@ -360,39 +361,26 @@ struct IntgemmViaRuy {
       ruy::Mul(lhs, rhs, mul_params, &context, &dst);
 
       // Unquantise:
-      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
+      float32x4_t multiplier = vdupq_n_f32(unquant_multiplier);
 
       if (!bias) {
         for (Index i = 0; i < rows_A*cols_B; i+=4) {
-          float32x4_t *inout = reinterpret_cast<const int32x4_t *>(output[i]);
-          inout = vmulq_f32(vcvtq_f32_s32(inout), multiplier);
+          const int32x4_t *in = reinterpret_cast<const int32x4_t *>(&output[i]);
+          float32x4_t *out = reinterpret_cast<float32x4_t *>(&output[i]);
+          *out = vmulq_f32(vcvtq_f32_s32(*in), multiplier);
         }
       } else {
         for (Index i = 0; i < cols_B; i+=4) {
-          float32x4_t *bias = reinterpret_cast<const int32x4_t *>(output[i]);
+          const float32x4_t *bias = reinterpret_cast<const float32x4_t *>(&output[i]);
           for (Index j = 0; j < rows_A; j+=4) {
-            float32x4_t *inout = reinterpret_cast<const int32x4_t *>(output[i*rows_A + j]);
-            inout = vaddq_f32(vmulq_f32(vcvtq_f32_s32(inout), multiplier), bias);
+            const int32x4_t *in = reinterpret_cast<const int32x4_t *>(&output[i*rows_A + j]);
+            float32x4_t *out = reinterpret_cast<float32x4_t *>(&output[i*rows_A + j]);
+            *out = vaddq_f32(vmulq_f32(vcvtq_f32_s32(*in), multiplier), *bias);
           }
         }
       }
     
-
-    while(Input != InputEnd) {
-      // InputEnd needs to be determined to end the while loop below.
-      const int32x4_t *RowEnd
-          = reinterpret_cast<const int32x4_t *>(reinterpret_cast<const int32_t *>(Input) + cols_B);
-
-      while(Input != RowEnd) {
-        // Operation happening for 4-elements together:
-        // output = [int32_t]input * [float]quant_mult + [float]bias;
-        float32x4_t floatInput = vcvtq_f32_s32(*Input++);
-        float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
-        *Output++ = unquantized;
-      }
     }
-      }
-  }
 
   // Int16 support is currently missing.
   struct Int16 {

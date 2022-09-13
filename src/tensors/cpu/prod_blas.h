@@ -14,7 +14,6 @@
 #endif
 
 #if USE_RUY_SGEMM
-
 // AlignedVector allocates aligned memory and cleans up after itself. RAII
 // wrapper similar to intgemm's AlignedVector.
 template <class T>

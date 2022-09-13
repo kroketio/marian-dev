@@ -8,7 +8,7 @@
 #include "tensors/tensor_allocator.h"
 
 #if MKL_FOUND
-#include <mkl.h>
+  #include <mkl.h>
 #elif BLAS_FOUND
    #include <cblas.h>
 #elif USE_ONNX_SGEMM
@@ -30,7 +30,7 @@ void Prod(marian::Tensor C,
           bool transB,
           float beta,
           float scalar) {
-#if BLAS_FOUND
+#if BLAS_FOUND || USE_RUY_SGEMM
   float alpha = scalar;
 
   int m = A->shape().elements() / A->shape()[-1];

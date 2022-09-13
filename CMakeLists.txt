@@ -70,12 +70,19 @@ CMAKE_DEPENDENT_OPTION(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" O
 if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
   set(USE_RUY ON)
 
-  # Apple M1 has Apple Accelerate(?).
+  # Apple M1 has Apple Accelerate.
+  message("TEST")
   if(NOT APPLE)
-    set(USE_RUY_SGEMM ON)
+    message("TEST 2")
+    set(USE_RUY_SGEMM ON CACHE BOOL "When on ARM and not on Apple use RUY as sgemm backend.")
   endif(NOT APPLE)
 
   set(USE_SIMD_UTILS ON)
+
+  # Some warnings as errors. I don't feel comfortable about the strict aliasing.
+  set(ARM_WARNINGS "-fno-strict-aliasing -Wno-comment")
+
+  #
 else()
   set(USE_INTGEMM ON)
 endif()
@@ -312,7 +319,7 @@ else(MSVC)
     set(CLANG_IGNORE_UNUSED_VALUES "-Wno-unused-value")
     set(CLANG_IGNORE_UNUSED_PRIVATE_FIELD -Wno-unused-private-field;) # This is necessary for the APPLE clang compiler to appear after -Werror
   endif()
-  set(DISABLE_GLOBALLY "-Wno-unused-result ${CLANG_IGNORE_UNKNOWN_CUDA} ${CLANG_IGNORE_UNUSED_VALUES}") # This needs to appear here as well to appease clang11+ on linux
+  set(DISABLE_GLOBALLY "-Wno-unused-result ${CLANG_IGNORE_UNKNOWN_CUDA} ${CLANG_IGNORE_UNUSED_VALUES} ${ARM_WARNINGS}") # This needs to appear here as well to appease clang11+ on linux
 
   # These are used in src/CMakeLists.txt on a per-target basis
   list(APPEND ALL_WARNINGS -Wall; -Werror; -Wextra; -Wno-unused-result; -Wno-deprecated;
