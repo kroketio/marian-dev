@@ -31,7 +31,7 @@ endif()
 
 # Custom CMake options
 option(COMPILE_CPU "Compile CPU version" ON)
-option(COMPILE_CUDA "Compile GPU version" ON)
+option(COMPILE_CUDA "Compile GPU version" OFF)
 option(COMPILE_EXAMPLES "Compile examples" OFF)
 option(COMPILE_SERVER "Compile marian-server" OFF)
 option(COMPILE_TESTS "Compile tests" OFF)
@@ -45,7 +45,6 @@ option(USE_CUDNN "Use CUDNN library" OFF)
 option(USE_DOXYGEN "Build documentation with Doxygen" ON)
 option(USE_FBGEMM "Use FBGEMM" OFF)
 option(USE_INTGEMM "Use INTGEMM" OFF)
-option(USE_RUY "Use Ruy" OFF)
 option(USE_MKL "Compile with MKL support" ON)
 option(USE_MPI "Use MPI library" OFF)
 option(USE_NCCL "Use NCCL library" ON)
@@ -56,7 +55,6 @@ option(COMPILE_WASM "Compile (wasm compatible) marian for WASM target" OFF)
 option(USE_WASM_COMPATIBLE_SOURCE "Enable the minimal marian sources that compile to wasm. Useful for debugging wasm failures by building same sources natively" OFF)
 
 option(USE_SIMD_UTILS "Enable simde to target instruction sets" OFF)
-option(USE_RUY_SGEMM "Compile with Ruy SGEMM" OFF)
 option(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" OFF)
 
 # cmake options that are dependent on USE_WASM_COMPATIBLE_SOURCE cmake option
@@ -68,14 +66,14 @@ CMAKE_DEPENDENT_OPTION(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" O
                        "USE_WASM_COMPATIBLE_SOURCE" OFF)
 
 if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
-  set(USE_RUY ON)
+  option(USE_RUY "Use Ruy" ON)
 
-  # Apple M1 has Apple Accelerate.
-  message("TEST")
-  if(NOT APPLE)
-    message("TEST 2")
-    set(USE_RUY_SGEMM ON CACHE BOOL "When on ARM and not on Apple use RUY as sgemm backend.")
-  endif(NOT APPLE)
+  # Apple M1 has Apple Accelerate. Otherwise fallback to RUY
+  if(APPLE)
+    option(USE_RUY_SGEMM "Compile with Ruy SGEMM" OFF)
+  else(APPLE)
+    option(USE_RUY_SGEMM "Compile with Ruy SGEMM" ON)
+  endif(APPLE)
 
   set(USE_SIMD_UTILS ON)
 

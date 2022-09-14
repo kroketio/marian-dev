@@ -23,6 +23,15 @@ namespace marian {
 namespace cpu {
 namespace integer {
 
+  namespace temp { //@TODO remove once we include integer_common
+    //Convenient function to get rows and columns of a tensor, shadowed by namespace.
+    inline int cols(Tensor& tensor) { return tensor->shape()[-1]; }
+    inline int rows(Tensor& tensor) { return tensor->shape().elements() / cols(tensor); }
+
+    inline int cols(Shape& shape) { return shape[-1]; }
+    inline int rows(Shape& shape) { return shape.elements() / cols(shape); }
+  }
+
 using Index = unsigned int;
 
 #if RUY_PLATFORM_NEON
@@ -329,6 +338,45 @@ struct IntgemmViaRuy {
     return result;
   }
 };
+
+struct PrepareNode : public NaryNodeOp {
+float quantMult_;
+bool isB_;
+  PrepareNode(Expr input, Expr quant_mult, bool isB=false)
+      : NaryNodeOp({input, quant_mult}, input->shape(), Type::int8), isB_(isB) {
+
+    setMemoize(isB_); // Only Memoise if this is a BNodeOp
+    set_name(input->name());
+    // Check if arguments are not null
+    ABORT_IF(child(0) == nullptr, "A cannot be null");
+    ABORT_IF(child(1) == nullptr, "Quant mult of A cannot be null");
+  }
+
+  NodeOps forwardOps() override {
+    return { [=]() {
+      quantMult_ = *child(1)->val()->data();
+      quantize(child(0)->val()->data(), /*input*/
+                val_->data<int8_t>(), /*output*/
+                *child(1)->val()->data(), /*Quant Mult*/
+                temp::rows(child(0)->val()),
+                temp::cols(child(0)->val()));
+    }};
+  }
+
+  NodeOps backwardOps() override {
+    ABORT("Only used for inference");
+    return {NodeOp(0)};
+  }
+
+  const std::string type() override {
+    if (isB_){
+      return "RuyPrepareB";
+    } else {
+      return "RuyPrepareA";
+    }
+  }
+};
+
 /*
 static inline Expr affineOrDotRUI(Expr a, Expr b, Expr bias, bool transA, bool transB) {
     Type bElementType = b->value_type();
