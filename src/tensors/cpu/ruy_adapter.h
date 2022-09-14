@@ -266,6 +266,10 @@ struct IntgemmViaRuy {
 
     static void PrepareB(const float * input, int8_t * output, float quant_mult, Index rows, Index cols) {
       quantize(input, output, quant_mult, rows, cols);
+      int8_t * temp = (int8_t*)malloc(rows*cols*sizeof(int8_t));
+      transpose(output, rows, cols, temp);
+      std::memcpy(output, temp, sizeof(int8_t)*rows*cols);
+      free(temp);
     }
 
     static void SelectColumnsB(const Type *input,
