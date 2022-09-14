@@ -167,69 +167,6 @@ inline void transpose(const int8_t *input, Index rows, Index cols, int8_t *outpu
   }
 }
 
-struct UnquantizeAndAddBiasAndWrite {
-  UnquantizeAndAddBiasAndWrite(float unquant_multiplier, const float *input_bias_prepared)
-      : unquant_multiplier_(unquant_multiplier), input_bias_prepared_(input_bias_prepared) {}
-
-  void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
-    // Set all registers in lane from same scalar value.
-    float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
-    const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
-    const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
-    float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
-
-    while(Input != InputEnd) {
-      // Bias cycles every column for addition.
-      const float32x4_t *Bias = reinterpret_cast<const float32x4_t *>(input_bias_prepared_);
-
-      // InputEnd needs to be determined to end the while loop below.
-      const int32x4_t *RowEnd
-          = reinterpret_cast<const int32x4_t *>(reinterpret_cast<const int32_t *>(Input) + cols_B);
-
-      while(Input != RowEnd) {
-        // Operation happening for 4-elements together:
-        // output = [int32_t]input * [float]quant_mult + [float]bias;
-        float32x4_t floatInput = vcvtq_f32_s32(*Input++);
-        float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
-        *Output++ = vaddq_f32(unquantized, *Bias++);
-      }
-    }
-  }
-
-private:
-  float unquant_multiplier_;
-  const float *input_bias_prepared_;
-};
-
-struct UnquantizeAndWrite {
-  explicit UnquantizeAndWrite(float unquant_multiplier) : unquant_multiplier_(unquant_multiplier) {}
-
-  void operator()(const int32_t *input, Index rows_A, Index cols_B, float *output) const {
-    // Set all registers in lane from same scalar value.
-    float32x4_t multiplier = vdupq_n_f32(unquant_multiplier_);
-    const int32x4_t *Input = reinterpret_cast<const int32x4_t *>(input);
-    const int32x4_t *InputEnd = reinterpret_cast<const int32x4_t *>(input + rows_A * cols_B);
-    float32x4_t *Output = reinterpret_cast<float32x4_t *>(output);
-
-    while(Input != InputEnd) {
-      // InputEnd needs to be determined to end the while loop below.
-      const int32x4_t *RowEnd
-          = reinterpret_cast<const int32x4_t *>(reinterpret_cast<const int32_t *>(Input) + cols_B);
-
-      while(Input != RowEnd) {
-        // Operation happening for 4-elements together:
-        // output = [int32_t]input * [float]quant_mult + [float]bias;
-        float32x4_t floatInput = vcvtq_f32_s32(*Input++);
-        float32x4_t unquantized = vmulq_f32(floatInput, multiplier);
-        *Output++ = unquantized;
-      }
-    }
-  }
-
-private:
-  float unquant_multiplier_;
-};
-
 #endif
 
 /*
@@ -237,7 +174,8 @@ private:
  * intgemm_interface.h diff minimal. There are possibly better abstractions.
  */
 struct IntgemmViaRuy {
-  // Intgemm nomenclature expects Int8. Missing functions are ABORTs.
+  // Since we do RowM * ColM, PrepareB (as known by intgemm) should perform a transposition first
+  // PrepareBtransposed because prepareB and vice versa
   struct Int8 {
     using Type = int8_t;
     static void PrepareBQuantizedTransposed(const Type *input,
@@ -286,50 +224,9 @@ struct IntgemmViaRuy {
       }
     }
 
-    // We don't have callback an no-op capability here yet. Multiply is kept similar to Mozilla
-    // specification and there are overloads with and without bias to avoid an if inside. This
-    // method corresponds to the one with bias.
-    // output = A*B + bias
-    template <class Callback>
-    static void Multiply(const Type *input_A_prepared,
-                         const Type *input_B_prepared,
-                         float *output,
-                         Index rows_A,
-                         Index width,
-                         Index cols_B,
-                         Callback callback) {
-      // It is expected that somehow we have managed to call all prepare by the time
-      // we are here, with inputs (prepared) in int8_t. All that's left to do is use
-      // ruy for multiply and then start with the reverse ops to get to fp32.
-
-      // Use ruy to multiply.
-      // The following is adapted from
-      // https://github.com/google/ruy/blob/878283640de7946a43053e8ebf4f15114fbc9156/example/example.cc#L129-L152
-
-      ruy::Context context;
-      ruy::Matrix<std::int8_t> lhs;
-      ruy::MakeSimpleLayout(rows_A, width, ruy::Order::kRowMajor, lhs.mutable_layout());
-      lhs.set_data(input_A_prepared);
-
-      ruy::Matrix<std::int8_t> rhs;
-      ruy::MakeSimpleLayout(width, cols_B, ruy::Order::kColMajor, rhs.mutable_layout());
-      rhs.set_data(input_B_prepared);
-
-      ruy::Matrix<std::int32_t> dst;
-      ruy::MakeSimpleLayout(rows_A, cols_B, ruy::Order::kRowMajor, dst.mutable_layout());
-
-      std::int32_t *dest_ptr = reinterpret_cast<std::int32_t *>(output);
-      dst.set_data(dest_ptr);
-
-      // When Dst is int32, mul_params is unused.
-      ruy::MulParams<std::int32_t, std::int32_t> mul_params;
-      ruy::Mul(lhs, rhs, mul_params, &context, &dst);
-
-      callback(dest_ptr, rows_A, cols_B, output);
-    }
   };
 
-    static void Multiply(const int8_t *input_A_prepared,
+    static void Multiply8Rui(const int8_t *input_A_prepared,
                          const int8_t *input_B_prepared,
                          float *output,
                          Index rows_A,
@@ -374,16 +271,15 @@ struct IntgemmViaRuy {
           *out = vmulq_f32(vcvtq_f32_s32(*in), multiplier);
         }
       } else {
-        for (Index i = 0; i < cols_B; i+=4) {
-          const float32x4_t *bias = reinterpret_cast<const float32x4_t *>(&output[i]);
-          for (Index j = 0; j < rows_A; j+=4) {
-            const int32x4_t *in = reinterpret_cast<const int32x4_t *>(&output[i*rows_A + j]);
-            float32x4_t *out = reinterpret_cast<float32x4_t *>(&output[i*rows_A + j]);
-            *out = vaddq_f32(vmulq_f32(vcvtq_f32_s32(*in), multiplier), *bias);
+        for (Index i = 0; i < rows_A; i++) {
+          for (Index j = 0; j < cols_B; j+=4) {
+            const float32x4_t *mybias = reinterpret_cast<const float32x4_t *>(&bias[j]);
+            const int32x4_t *in = reinterpret_cast<const int32x4_t *>(&output[i*cols_B + j]);
+            float32x4_t *out = reinterpret_cast<float32x4_t *>(&output[i*cols_B + j]);
+            *out = vaddq_f32(vmulq_f32(vcvtq_f32_s32(*in), multiplier), *mybias);
           }
         }
       }
-    
     }
 
   // Int16 support is currently missing.
@@ -433,6 +329,28 @@ struct IntgemmViaRuy {
     return result;
   }
 };
+/*
+static inline Expr affineOrDotRUI(Expr a, Expr b, Expr bias, bool transA, bool transB) {
+    Type bElementType = b->value_type();
+    Expr aQuantMult = nullptr;
+    bool precomputedAlphas = b->graph()->getBackend()->isPrecomputedAlpha();
+    if (precomputedAlphas) { //Shifting here maybe should check?
+      aQuantMult = Expression<fetchAlphaFromModelNodeOp>(b);
+    } else {
+      aQuantMult = quantMult<vtype>(a, true, b->name());
+    }
+    auto aQuant = prepareA<vtype>(transA ? transpose(a) : a, aQuantMult);
+    Expr bQuantMult = quantMult<vtype>(b);
+    Expr bQuant = nullptr;
+    if (isIntgemm(bElementType)) {
+      //This is the case where we already run SelectColumnB or we loaded a prepacked model.
+      bQuant = b;
+    } else {
+      bQuant = prepareB<vtype>(b, bQuantMult, scale, transB);
+    }
+
+  }
+}*/
 
 }  // namespace integer
 }  // namespace cpu

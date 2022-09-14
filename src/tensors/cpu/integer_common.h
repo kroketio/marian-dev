@@ -3,6 +3,9 @@
 #include "tensors/tensor_allocator.h"
 #include "tensors/tensor_operators.h"
 #include "tensors/cpu/aligned.h"
+#include "graph/expression_graph.h"
+#include "graph/node.h"
+#include "graph/node_operators_unary.h"
 #include "common/io_item.h"
 #ifdef USE_INTGEMM
 #include "3rd_party/intgemm/intgemm/intgemm.h"
@@ -24,6 +27,45 @@
 namespace marian {
 namespace cpu {
 namespace integer {
+
+// Making sure we have access to common functions for RUY and INTGEMM
+class fetchAlphaFromModelNodeOp : public UnaryNodeOp {
+public:
+  fetchAlphaFromModelNodeOp(Expr b)
+      : UnaryNodeOp(b, Shape({1}), Type::float32) {
+
+    std::string bname = b->name();
+    std::string aQuantKey = b->name() + "_QuantMultA";
+    //Very Hacky Bit. Unnamed matrix is notpart of the F0 parameter namespace
+    if (aQuantKey.at(0) != 'F') {
+      aQuantKey = "F0::" + aQuantKey;
+    }
+    set_name(aQuantKey);
+  }
+
+  NodeOps forwardOps() override {
+    return {NodeOp(
+      auto map = child(0)->graph()->params()->getMap();
+      const auto mapiter = map.find(name());
+      if (mapiter != map.end()) {
+        val_ = mapiter->second->val();
+      } else {
+        ABORT("We did not find an alpha in the model named: {}.", name());
+      }
+    )};
+  }
+
+  bool equal(Expr node) override {
+    if(hash() == node->hash()) return true;
+    return false;
+  }
+
+  size_t hash() override {
+    return std::hash<std::string>{}(name());
+  }
+
+  const std::string type() override { return "alphaNodeOp"; }
+};
 
 //Convenient function to get rows and columns of a tensor, shadowed by namespace.
 inline int cols(Tensor& tensor) { return tensor->shape()[-1]; }

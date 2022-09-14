@@ -1,7 +1,4 @@
 #pragma once
-
-#include "graph/node.h"
-#include "graph/node_operators_unary.h"
 #include "integer_common.h"
 
 namespace marian {
@@ -460,16 +457,13 @@ public:
                                            cols(child(1)->val()),
                                            intgemm::callbacks::UnquantizeAndWrite(unquant_mult, val_->data()));
       #else
-        typedef typename intgemm_<vtype>::type Integer;
-        auto callback = marian::cpu::integer::UnquantizeAndWrite(unquant_mult);
-        intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
-                                   reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
-                                   val_->data(), /*output*/
-                                   rows(child(0)->val()),
-                                   cols(child(0)->val()),
-                                   cols(child(1)->val()),                                          
-                                   callback);
-
+        IntgemmViaRuy::Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
+                                    reinterpret_cast<const int8_t *>(child(1)->val()->data()), /*B*/
+                                    val_->data(), /*output*/
+                                    rows(child(0)->val()),
+                                    cols(child(0)->val()),
+                                    cols(child(1)->val()),
+                                    unquant_mult);
       #endif
     }};
 #else
@@ -554,18 +548,14 @@ public:
                                   intgemm::callbacks::UnquantizeAndAddBiasAndWrite(unquant_mult, child(2)->val()->data(), val_->data()));
           }
       #else
-        typedef typename intgemm_<vtype>::type Integer;
-        auto callback = marian::cpu::integer::UnquantizeAndAddBiasAndWrite(unquant_mult, 
-                                   child(2)->val()->data()  /*child(2) is bias*/);
-        intgemm_<vtype>::width::Multiply(reinterpret_cast<Integer *>(child(0)->val()->data()), /*A*/
-                                   reinterpret_cast<Integer *>(child(1)->val()->data()), /*B*/
-                                   val_->data(), /*output*/
-                                   rows(child(0)->val()),
-                                   cols(child(0)->val()),
-                                   cols(child(1)->val()),                                          
-                                   callback);
-
-
+        IntgemmViaRuy::Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
+                                    reinterpret_cast<const int8_t *>(child(1)->val()->data()), /*B*/
+                                    val_->data(), /*output*/
+                                    rows(child(0)->val()),
+                                    cols(child(0)->val()),
+                                    cols(child(1)->val()),
+                                    unquant_mult,
+                                    child(2)->val()->data());
       #endif
     }};
 #else
@@ -600,44 +590,6 @@ template<Type vtype>
 static inline Expr selectColumnsB(Expr b, const std::vector<uint_least32_t> &cols, float clipValue) {
   return Expression<SelectColumnsBNodeOp<vtype > >(b, cols, clipValue);
 }
-
-class fetchAlphaFromModelNodeOp : public UnaryNodeOp {
-public:
-  fetchAlphaFromModelNodeOp(Expr b)
-      : UnaryNodeOp(b, Shape({1}), Type::float32) {
-
-    std::string bname = b->name();
-    std::string aQuantKey = b->name() + "_QuantMultA";
-    //Very Hacky Bit. Unnamed matrix is notpart of the F0 parameter namespace
-    if (aQuantKey.at(0) != 'F') {
-      aQuantKey = "F0::" + aQuantKey;
-    }
-    set_name(aQuantKey);
-  }
-
-  NodeOps forwardOps() override {
-    return {NodeOp(
-      auto map = child(0)->graph()->params()->getMap();
-      const auto mapiter = map.find(name());
-      if (mapiter != map.end()) {
-        val_ = mapiter->second->val();
-      } else {
-        ABORT("We did not find an alpha in the model named: {}.", name());
-      }
-    )};
-  }
-
-  bool equal(Expr node) override {
-    if(hash() == node->hash()) return true;
-    return false;
-  }
-
-  size_t hash() override {
-    return std::hash<std::string>{}(name());
-  }
-
-  const std::string type() override { return "alphaNodeOp"; }
-};
 
 template<Type vtype>
 static inline Expr affine(Expr a, Expr b, Expr bias, bool transA, bool transB, float scale, float /* clipValue currently unused */ = 0.0f, bool shiftedBias=false) {
