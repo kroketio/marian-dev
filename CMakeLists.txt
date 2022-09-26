@@ -80,6 +80,8 @@ if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
   # Some warnings as errors. I don't feel comfortable about the strict aliasing.
   set(ARM_WARNINGS "-fno-strict-aliasing -Wno-comment")
 
+  # Define that we are using ARM
+  add_compile_definitions(ARM)
   #
 else()
   set(USE_INTGEMM ON)

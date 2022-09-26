@@ -30,6 +30,44 @@ namespace integer {
 
     inline int cols(Shape& shape) { return shape[-1]; }
     inline int rows(Shape& shape) { return shape.elements() / cols(shape); }
+
+    class fetchAlphaFromModelNodeOp : public UnaryNodeOp {
+public:
+  fetchAlphaFromModelNodeOp(Expr b)
+      : UnaryNodeOp(b, Shape({1}), Type::float32) {
+
+    std::string bname = b->name();
+    std::string aQuantKey = b->name() + "_QuantMultA";
+    //Very Hacky Bit. Unnamed matrix is notpart of the F0 parameter namespace
+    if (aQuantKey.at(0) != 'F') {
+      aQuantKey = "F0::" + aQuantKey;
+    }
+    set_name(aQuantKey);
+  }
+
+  NodeOps forwardOps() override {
+    return {NodeOp(
+      auto map = child(0)->graph()->params()->getMap();
+      const auto mapiter = map.find(name());
+      if (mapiter != map.end()) {
+        val_ = mapiter->second->val();
+      } else {
+        ABORT("We did not find an alpha in the model named: {}.", name());
+      }
+    )};
+  }
+
+  bool equal(Expr node) override {
+    if(hash() == node->hash()) return true;
+    return false;
+  }
+
+  size_t hash() override {
+    return std::hash<std::string>{}(name());
+  }
+
+  const std::string type() override { return "alphaNodeOp"; }
+};
   }
 
 using Index = unsigned int;
@@ -342,11 +380,17 @@ struct IntgemmViaRuy {
 struct PrepareNode : public NaryNodeOp {
 float quantMult_;
 bool isB_;
-  PrepareNode(Expr input, Expr quant_mult, bool isB=false)
-      : NaryNodeOp({input, quant_mult}, input->shape(), Type::int8), isB_(isB) {
+bool transpose_;
+  PrepareNode(Expr input, Expr quant_mult, bool transposeme=false, bool isB=false)
+      : NaryNodeOp({input, quant_mult}, newShape(input, transposeme), Type::intgemm8), isB_(isB),
+      // Since we are doing RowM x ColM, we should ALWAYS transpose B when prepare
+      // UNLESS it's already transposed (eg the output layer).
+      // On the other hand transposing A should work as normal
+      transpose_(isB_ ? !transposeme : transposeme) {
 
     setMemoize(isB_); // Only Memoise if this is a BNodeOp
     set_name(input->name());
+
     // Check if arguments are not null
     ABORT_IF(child(0) == nullptr, "A cannot be null");
     ABORT_IF(child(1) == nullptr, "Quant mult of A cannot be null");
@@ -360,7 +404,31 @@ bool isB_;
                 *child(1)->val()->data(), /*Quant Mult*/
                 temp::rows(child(0)->val()),
                 temp::cols(child(0)->val()));
+
+      if (transpose_) {
+        int rows = temp::rows(child(0)->val());
+        int cols = temp::cols(child(0)->val());
+        auto allocator = New<TensorAllocator>(graph()->getBackend());
+
+        Tensor temp;
+        allocator->allocate(temp, shape(), Type::int8);
+
+        transpose(val_->data<int8_t>(), rows, cols, temp->data<int8_t>());
+        std::memcpy(val_->data<int8_t>(), temp->data<int8_t>(), sizeof(int8_t)*rows*cols);
+        allocator->free(temp);
+      }
     }};
+  }
+
+  static Shape newShape(Expr input, bool transposed) {
+    Shape ret = input->shape();
+    if (transposed) {
+      ret.set(0, input->shape()[-1]);
+      ret.set(1, input->shape()[0]);
+    } else {
+      ret = input->shape();
+    }
+    return ret;
   }
 
   NodeOps backwardOps() override {
@@ -377,28 +445,199 @@ bool isB_;
   }
 };
 
-/*
-static inline Expr affineOrDotRUI(Expr a, Expr b, Expr bias, bool transA, bool transB) {
+struct SelectColumnsBRuyNodeOp : public UnaryNodeOp {
+public:
+  float quantMult_;
+  SelectColumnsBRuyNodeOp(Expr input, const std::vector<uint_least32_t>  &indices)
+      : UnaryNodeOp(input, newShape(input, indices), input->value_type()),  indices_(indices) {
+
+    set_name(input->name());
+    setMemoize(false); // Enabling memoization leads to a massive memory leak.
+                       // Still, I don't understand why setMemoize(true) still leaks.
+    // Check if arguments are not null
+    ABORT_IF(child(0) == nullptr, "B cannot be null");
+  }
+
+  NodeOps forwardOps() override {
+    return { [=]() {
+      //We get the quantization multiplier from a PrepareB or directly from the input
+      if (child(0)->type() == "RuyPrepareB") {
+        auto bPreppedNode = std::static_pointer_cast<PrepareNode>(child(0));
+        quantMult_ = bPreppedNode->quantMult_;
+      } else {
+        ABORT("We should not be here");
+      }
+      auto input = child(0)->val();
+      IntgemmViaRuy::Int8::SelectColumnsB(
+                    reinterpret_cast<int8_t *>(input->data()),
+                    val_->data<int8_t>(),
+                    temp::rows(input),
+                    indices_.data(),
+                    indices_.data()+indices_.size());
+    }};
+  }
+
+  const std::string type() override { return "RuySelectColumnsB"; }
+
+  size_t hash() override {
+    if (!hash_) {
+      hash_ = NaryNodeOp::hash();
+      for(auto i : indices_)
+        util::hash_combine(hash_, i);
+    }
+    return hash_;
+  }
+
+  bool equal(Expr node) override {
+    if(!NaryNodeOp::equal(node)) return false;
+    auto cnode = std::dynamic_pointer_cast<SelectColumnsBRuyNodeOp>(node);
+    if (!cnode) return false;
+    return indices_ == cnode->indices_;
+  }
+
+private:
+  static Shape newShape(Expr a, const std::vector<uint_least32_t>& indices) {
+    Shape ret = a->shape();
+    ret.set(1, indices.size());
+    return ret;
+  }
+
+  std::vector<uint_least32_t> indices_;
+};
+
+struct QuantMultRuyNodeOp : public UnaryNodeOp {
+  bool isB_;
+  QuantMultRuyNodeOp(Expr input, bool isB, std::string bname) : UnaryNodeOp(input, Shape({1}), Type::float32), isB_(isB) {
+    if (isB_) {
+      set_name(input->name() + "_QuantMultB");
+    } else {
+      setMemoize(false);
+      set_name(bname + "_QuantMultA");
+    }
+  }
+#pragma warning(push)
+#pragma warning(disable: 4127) //VSCODE thinks line 222 is constant conditional expression, which it is only after the template resolution, not before.
+  NodeOps forwardOps() override {
+    return  {[=](){
+      if (child(0)->type() == "RuySelectColumnsB") { // @TODO
+        *val_->data() = std::static_pointer_cast<SelectColumnsBRuyNodeOp>(child(0))->quantMult_;
+      } else if (isIntgemm(child(0)->value_type())) {                    /* So we can template*/
+        *val_->data() = *(reinterpret_cast<float *>(reinterpret_cast<int8_t *>(child(0)->val()->data()) + child(0)->val()->shape().elements()));
+      } else {
+        auto input = child(0)->val();
+        *val_->data() = 127.0f / IntgemmViaRuy::MaxAbsolute(input->data(), input->data() + input->size());
+      }
+    }};
+  }
+#pragma warning(pop)
+  NodeOps backwardOps() override {
+    ABORT("Only used for inference");
+    return {NodeOp(0)};
+  }
+
+  const std::string type() override {
+    if (isB_)
+      return "RuyQuantMultB";
+    else
+      return "RuyQuantMultA";
+  }
+
+  /* @TODO This is not correct in the case of none-static alphas but we are leaving it for now to battle memory leaks. */
+  bool equal(Expr node) override {
+    if (!isB_) {
+      return UnaryNodeOp::equal(node);
+    }
+    if(hash() == node->hash()) return true;
+    return false;
+  }
+
+  size_t hash() override {
+    return std::hash<std::string>{}(name());
+  }
+
+};
+
+class AffineOrDotNodeOp : public NaryNodeOp {
+
+public:
+  AffineOrDotNodeOp(Expr a, Expr b, Expr bias)
+      : NaryNodeOp({a, b, bias}, newShape(a, b), Type::float32) {
+        setMemoize(false); // AFAIK affine is never called with the same matrices
+      }
+
+  AffineOrDotNodeOp(Expr a, Expr b)
+      : NaryNodeOp({a, b}, newShape(a, b), Type::float32) {
+        setMemoize(false); // AFAIK affine is never called with the same matrices
+      }
+
+
+  Shape newShape(Expr a, Expr b) {
+    Shape result = a->shape();
+    result.set(-1, b->shape()[-1]);
+    return result;
+  }
+
+  NodeOps forwardOps() override {
+    return { [=]() {
+          float aQuantMult = std::static_pointer_cast<PrepareNode >(child(0))->quantMult_;
+          float bQuantMult;
+          if (child(1)->type() == "RuySelectColumnsB") {
+            bQuantMult = std::static_pointer_cast<SelectColumnsBRuyNodeOp>(child(1))->quantMult_;
+          } else if (child(1)->type() == "RuyPrepareB") {
+            bQuantMult = std::static_pointer_cast<PrepareNode>(child(1))->quantMult_;
+          } else {
+            // Fetch the quant mult directly in case of already prepared B
+            bQuantMult = *(reinterpret_cast<float *>(reinterpret_cast<int8_t *>(child(1)->val()->data()) + child(1)->val()->shape().elements()));
+          }
+          float unquant_mult = 1.0f/(aQuantMult*bQuantMult);
+          // The bias is either nullptr or the third child
+          float * bias = nullptr;
+          if (children().size() == 3) {
+            bias = child(2)->val()->data();
+          }
+          IntgemmViaRuy::Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
+                                      reinterpret_cast<const int8_t *>(child(1)->val()->data()), /*B*/
+                                      val_->data(), /*output*/
+                                      temp::rows(child(0)->val()),
+                                      temp::cols(child(0)->val()),
+                                      temp::cols(child(1)->val()),
+                                      unquant_mult,
+                                      bias);
+    }};
+  }
+
+  NodeOps backwardOps() override {
+    ABORT("Only used for inference");
+    return {NodeOp(0)};
+  }
+
+  const std::string type() override { return "intgemmAffine"; }
+};
+
+static inline Expr affineOrDotRUI(Expr a, Expr b, Expr bias, bool transA, bool transB, float /*clipValue*/) {
     Type bElementType = b->value_type();
     Expr aQuantMult = nullptr;
     bool precomputedAlphas = b->graph()->getBackend()->isPrecomputedAlpha();
     if (precomputedAlphas) { //Shifting here maybe should check?
-      aQuantMult = Expression<fetchAlphaFromModelNodeOp>(b);
+      aQuantMult = Expression<temp::fetchAlphaFromModelNodeOp>(b);
     } else {
-      aQuantMult = quantMult<vtype>(a, true, b->name());
+      aQuantMult = Expression<QuantMultRuyNodeOp>(a, false, b->name());
     }
-    auto aQuant = prepareA<vtype>(transA ? transpose(a) : a, aQuantMult);
-    Expr bQuantMult = quantMult<vtype>(b);
+    auto aQuant = Expression<PrepareNode>(a, aQuantMult, transA, false);
+    Expr bQuantMult = Expression<QuantMultRuyNodeOp>(b, true, b->name());
     Expr bQuant = nullptr;
     if (isIntgemm(bElementType)) {
       //This is the case where we already run SelectColumnB or we loaded a prepacked model.
       bQuant = b;
     } else {
-      bQuant = prepareB<vtype>(b, bQuantMult, scale, transB);
+      bQuant = Expression<PrepareNode>(b, bQuantMult, transB, true);
     }
-
-  }
-}*/
+    if (bias) {
+      return Expression<AffineOrDotNodeOp>(aQuant, bQuant, bias);
+    } else {
+      return Expression<AffineOrDotNodeOp>(aQuant, bQuant);
+    }
+}
 
 }  // namespace integer
 }  // namespace cpu

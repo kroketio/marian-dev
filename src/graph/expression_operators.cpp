@@ -475,6 +475,11 @@ Expr dot(Expr a, Expr b, bool transA, bool transB, float scale) {
   // --optimize --cpu-thread=N with N > 0 are set.
   if(device == DeviceType::cpu) {
     if(isFloat(aElementType) && (isFloat(bElementType) || isIntgemm(bElementType))) {
+#ifdef ARM
+      if (a->graph()->getBackend()->isInt8() || matchType<intgemm8>(bElementType)) {
+        return cpu::integer::affineOrDotRUI(a, b, nullptr, transA, transB, clipValue);
+      }
+#else
       if(a->graph()->getBackend()->isInt8() || matchType<intgemm8>(bElementType)) {
         bool shiftedAll = a->graph()->getBackend()->isShiftedAll(); //@TODO
         return cpu::integer::dot<Type::int8>(
@@ -491,7 +496,9 @@ Expr dot(Expr a, Expr b, bool transA, bool transB, float scale) {
           transA,
           transB,
           scale);
-      } else {
+      }
+#endif
+      else {
         return Expression<DotNodeOp>(
           clip(a, clipValue), clip(b, clipValue), transA, transB, scale);
       }
@@ -556,9 +563,13 @@ Expr affine(Expr a, Expr b, Expr bias, bool transA, bool transB, float scale) {
   float clipValue = a->graph()->getBackend()->getClip();
   Type aElementType = a->value_type();
   Type bElementType = b->value_type();
-
   if(device == DeviceType::cpu) {
     if(isFloat(aElementType) && (isFloat(bElementType) || isIntgemm(bElementType))) {
+#ifdef ARM
+      if (a->graph()->getBackend()->isInt8() || matchType<intgemm8>(bElementType)) {
+        return cpu::integer::affineOrDotRUI(a, b, bias, transA, transB, clipValue);
+      }
+#else
       if(a->graph()->getBackend()->isInt8()  || matchType<intgemm8>(bElementType) ) {
         bool shiftedBias = a->graph()->getBackend()->isShifted();
         return cpu::integer::affine<Type::int8>(
@@ -579,7 +590,9 @@ Expr affine(Expr a, Expr b, Expr bias, bool transA, bool transB, float scale) {
           transB,
           scale,
           clipValue);
-      } else {
+      }
+#endif
+      else {
         return affineDefault(a, b, bias, transA, transB, scale);
       }
     } else if(isFloat(aElementType) && isPacked(bElementType)) {
