@@ -55,14 +55,6 @@ bool shifted_;
                                       rows(child(0)->val()),
                                       cols(child(0)->val()));
       }
-  #else 
-  // Copied from above. No shifted in ARM.
-    typedef typename intgemm_<vtype>::type Integer;
-    intgemm_<vtype>::width::PrepareA(child(0)->val()->data(), /*input*/
-                                      val_->data<Integer>(), /*output*/
-                                      *child(1)->val()->data(), /*Quant Mult*/
-                                      rows(child(0)->val()),
-                                      cols(child(0)->val()));
   #endif
   }};
 #else
@@ -285,8 +277,6 @@ struct QuantMultNodeOp : public UnaryNodeOp {
         auto input = child(0)->val();
         #if defined(USE_INTGEMM)
           *val_->data() = 127.0f / intgemm::MaxAbsolute(input->data(), input->data() + input->size());
-        #else
-          *val_->data() = 127.0f / IntgemmViaRuy::MaxAbsolute(input->data(), input->data() + input->size());
         #endif
       }
     #endif // COMPILE_CPU
@@ -456,14 +446,6 @@ public:
                                            cols(child(0)->val()),
                                            cols(child(1)->val()),
                                            intgemm::callbacks::UnquantizeAndWrite(unquant_mult, val_->data()));
-      #else
-        IntgemmViaRuy::Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
-                                    reinterpret_cast<const int8_t *>(child(1)->val()->data()), /*B*/
-                                    val_->data(), /*output*/
-                                    rows(child(0)->val()),
-                                    cols(child(0)->val()),
-                                    cols(child(1)->val()),
-                                    unquant_mult);
       #endif
     }};
 #else
@@ -547,15 +529,6 @@ public:
                                   cols(child(1)->val()),                                          /*child(2) is bias*/
                                   intgemm::callbacks::UnquantizeAndAddBiasAndWrite(unquant_mult, child(2)->val()->data(), val_->data()));
           }
-      #else
-        IntgemmViaRuy::Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
-                                    reinterpret_cast<const int8_t *>(child(1)->val()->data()), /*B*/
-                                    val_->data(), /*output*/
-                                    rows(child(0)->val()),
-                                    cols(child(0)->val()),
-                                    cols(child(1)->val()),
-                                    unquant_mult,
-                                    child(2)->val()->data());
       #endif
     }};
 #else

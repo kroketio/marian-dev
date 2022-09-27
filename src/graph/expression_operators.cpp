@@ -7,7 +7,11 @@
 #include "graph/node_operators_tuple.h"
 
 #include "graph/auto_tuner.h"
+#ifdef ARM
+#include "tensors/cpu/ruy_interface.h"
+#else
 #include "tensors/cpu/intgemm_interface.h"
+#endif
 #include "tensors/cpu/fbgemm/expanded_gemm.h"
 
 #if USE_FBGEMM

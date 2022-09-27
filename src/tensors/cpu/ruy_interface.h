@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include "integer_common.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcomment"
 #include "ruy/platform.h"
@@ -22,53 +23,6 @@
 namespace marian {
 namespace cpu {
 namespace integer {
-
-  namespace temp { //@TODO remove once we include integer_common
-    //Convenient function to get rows and columns of a tensor, shadowed by namespace.
-    inline int cols(Tensor& tensor) { return tensor->shape()[-1]; }
-    inline int rows(Tensor& tensor) { return tensor->shape().elements() / cols(tensor); }
-
-    inline int cols(Shape& shape) { return shape[-1]; }
-    inline int rows(Shape& shape) { return shape.elements() / cols(shape); }
-
-    class fetchAlphaFromModelNodeOp : public UnaryNodeOp {
-public:
-  fetchAlphaFromModelNodeOp(Expr b)
-      : UnaryNodeOp(b, Shape({1}), Type::float32) {
-
-    std::string bname = b->name();
-    std::string aQuantKey = b->name() + "_QuantMultA";
-    //Very Hacky Bit. Unnamed matrix is notpart of the F0 parameter namespace
-    if (aQuantKey.at(0) != 'F') {
-      aQuantKey = "F0::" + aQuantKey;
-    }
-    set_name(aQuantKey);
-  }
-
-  NodeOps forwardOps() override {
-    return {NodeOp(
-      auto map = child(0)->graph()->params()->getMap();
-      const auto mapiter = map.find(name());
-      if (mapiter != map.end()) {
-        val_ = mapiter->second->val();
-      } else {
-        ABORT("We did not find an alpha in the model named: {}.", name());
-      }
-    )};
-  }
-
-  bool equal(Expr node) override {
-    if(hash() == node->hash()) return true;
-    return false;
-  }
-
-  size_t hash() override {
-    return std::hash<std::string>{}(name());
-  }
-
-  const std::string type() override { return "alphaNodeOp"; }
-};
-  }
 
 using Index = unsigned int;
 
@@ -220,45 +174,9 @@ inline void transpose(const int8_t *input, Index rows, Index cols, int8_t *outpu
  * The following nomenclature comes from intgemm. The current state of code is to keep the
  * intgemm_interface.h diff minimal. There are possibly better abstractions.
  */
-struct IntgemmViaRuy {
-  // Since we do RowM * ColM, PrepareB (as known by intgemm) should perform a transposition first
-  // PrepareBtransposed because prepareB and vice versa
-  struct Int8 {
-    using Type = int8_t;
-    static void PrepareBQuantizedTransposed(const Type *input,
-                                            Type *output,
-                                            Index rows,
-                                            Index cols) {
-      std::memcpy(output, input, /*count=*/sizeof(Type) * (rows * cols));
-    }
 
-    static void PrepareBTransposed(const float *input,
-                                   Type *output,
-                                   float quant_mult,
-                                   Index rows,
-                                   Index cols) {
-      quantize(input, output, quant_mult, rows, cols);
-    }
-
-
-    static void PrepareA(const float *input,
-                         int8_t *output,
-                         float quant_mult,
-                         Index rows,
-                         Index cols) {
-      quantize(input, output, quant_mult, rows, cols);
-    }
-
-    static void PrepareB(const float * input, int8_t * output, float quant_mult, Index rows, Index cols) {
-      quantize(input, output, quant_mult, rows, cols);
-      int8_t * temp = (int8_t*)malloc(rows*cols*sizeof(int8_t));
-      transpose(output, rows, cols, temp);
-      std::memcpy(output, temp, sizeof(int8_t)*rows*cols);
-      free(temp);
-    }
-
-    static void SelectColumnsB(const Type *input,
-                               Type *output,
+    static void SelectColumnsB(const int8_t *input,
+                               int8_t *output,
                                Index width,
                                const Index *cols,
                                const Index *cols_end) {
@@ -271,7 +189,6 @@ struct IntgemmViaRuy {
       }
     }
 
-  };
 
     static void Multiply8Rui(const int8_t *input_A_prepared,
                          const int8_t *input_B_prepared,
@@ -329,53 +246,14 @@ struct IntgemmViaRuy {
       }
     }
 
-  // Int16 support is currently missing.
-  struct Int16 {
-    using Type = int16_t;
-    static void Quantize(const float *, Type *, float, Index) { ABORT("Quantize unsupported"); }
-
-    static void PrepareA(const float *input,
-                         Type *output,
-                         float quant_mult,
-                         Index rows,
-                         Index cols) {
-      ABORT("PrepareA Unsupported");
-    }
-
-    static void PrepareB(const float *, Type *, float, Index, Index) {
-      ABORT("PrepareB Unsupported");
-    }
-    static void PrepareBQuantizedTransposed(const Type *, Type *, Index, Index) {
-      ABORT("PrepareBQuantizedTransposed Unsupported");
-    }
-    static void PrepareBTransposed(const float *, Type *, float, Index, Index) {
-      ABORT("PrepareBTransposed Unsupported");
-    }
-    static void SelectColumnsB(const Type *, Type *, Index, const Index *, const Index *) {
-      ABORT("SelectColumnsB Unsupported");
-    }
-
-    template <class Callback>
-    static void Multiply(const Type *A_prepared,
-                         const Type *B_prepared,
-                         float *output,
-                         Index rows_A,
-                         Index width,
-                         Index cols_B,
-                         Callback callback) {
-      ABORT("Multiply (A*B) Unsupported");
-    }
-  };
-
-  template <class T>
-  static T MaxAbsolute(const T *begin, const T *end) {
-    T result = 0;
+  static float MaxAbsolute(const float *begin, const float *end) {
+    float result = 0;
     for(auto p = begin; p < end; ++p) {
       result = std::max(result, std::abs(*p));
     }
     return result;
   }
-};
+
 
 struct PrepareNode : public NaryNodeOp {
 float quantMult_;
@@ -402,19 +280,19 @@ bool transpose_;
       quantize(child(0)->val()->data(), /*input*/
                 val_->data<int8_t>(), /*output*/
                 *child(1)->val()->data(), /*Quant Mult*/
-                temp::rows(child(0)->val()),
-                temp::cols(child(0)->val()));
+                rows(child(0)->val()),
+                cols(child(0)->val()));
 
       if (transpose_) {
-        int rows = temp::rows(child(0)->val());
-        int cols = temp::cols(child(0)->val());
+        int myrows = rows(child(0)->val());
+        int mycols = cols(child(0)->val());
         auto allocator = New<TensorAllocator>(graph()->getBackend());
 
         Tensor temp;
         allocator->allocate(temp, shape(), Type::int8);
 
-        transpose(val_->data<int8_t>(), rows, cols, temp->data<int8_t>());
-        std::memcpy(val_->data<int8_t>(), temp->data<int8_t>(), sizeof(int8_t)*rows*cols);
+        transpose(val_->data<int8_t>(), myrows, mycols, temp->data<int8_t>());
+        std::memcpy(val_->data<int8_t>(), temp->data<int8_t>(), sizeof(int8_t)*myrows*mycols);
         allocator->free(temp);
       }
     }};
@@ -468,10 +346,9 @@ public:
         ABORT("We should not be here");
       }
       auto input = child(0)->val();
-      IntgemmViaRuy::Int8::SelectColumnsB(
-                    reinterpret_cast<int8_t *>(input->data()),
+      SelectColumnsB(reinterpret_cast<int8_t *>(input->data()),
                     val_->data<int8_t>(),
-                    temp::rows(input),
+                    rows(input),
                     indices_.data(),
                     indices_.data()+indices_.size());
     }};
@@ -525,7 +402,7 @@ struct QuantMultRuyNodeOp : public UnaryNodeOp {
         *val_->data() = *(reinterpret_cast<float *>(reinterpret_cast<int8_t *>(child(0)->val()->data()) + child(0)->val()->shape().elements()));
       } else {
         auto input = child(0)->val();
-        *val_->data() = 127.0f / IntgemmViaRuy::MaxAbsolute(input->data(), input->data() + input->size());
+        *val_->data() = 127.0f / MaxAbsolute(input->data(), input->data() + input->size());
       }
     }};
   }
@@ -595,12 +472,12 @@ public:
           if (children().size() == 3) {
             bias = child(2)->val()->data();
           }
-          IntgemmViaRuy::Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
+          Multiply8Rui(reinterpret_cast<const int8_t *>(child(0)->val()->data()), /*A*/
                                       reinterpret_cast<const int8_t *>(child(1)->val()->data()), /*B*/
                                       val_->data(), /*output*/
-                                      temp::rows(child(0)->val()),
-                                      temp::cols(child(0)->val()),
-                                      temp::cols(child(1)->val()),
+                                      rows(child(0)->val()),
+                                      cols(child(0)->val()),
+                                      cols(child(1)->val()),
                                       unquant_mult,
                                       bias);
     }};
@@ -619,7 +496,7 @@ static inline Expr affineOrDotRUI(Expr a, Expr b, Expr bias, bool transA, bool t
     Expr aQuantMult = nullptr;
     bool precomputedAlphas = b->graph()->getBackend()->isPrecomputedAlpha();
     if (precomputedAlphas) { //Shifting here maybe should check?
-      aQuantMult = Expression<temp::fetchAlphaFromModelNodeOp>(b);
+      aQuantMult = Expression<fetchAlphaFromModelNodeOp>(b);
     } else {
       aQuantMult = Expression<QuantMultRuyNodeOp>(a, false, b->name());
     }

@@ -15,7 +15,6 @@
 #include <ruy/ruy.h>
 #pragma GCC diagnostic pop
 
-#include "ruy_adapter.h"
 #endif // USE_INTGEMM
 #if defined(WASM)
 #include "wasm_intgemm_interface.h"
@@ -91,12 +90,17 @@ template <> struct intgemm_<Type::int16> {using width = intgemm::Int16;
 
 #else // USE_INTGEMM
 
+struct fakeGemm {
+  struct Int8 {};
+  struct Int16 {};
+};
+
 template<Type type> struct intgemm_;
-template <> struct intgemm_<Type::int8> {using width = IntgemmViaRuy::Int8;
-                                         using type = IntgemmViaRuy::Int8::Type;
+template <> struct intgemm_<Type::int8> {using width = fakeGemm::Int8;
+                                         using type = int8_t;
                                          constexpr static const Type intgemmType = Type::intgemm8;};
-template <> struct intgemm_<Type::int16> {using width = IntgemmViaRuy::Int16;
-                                          using type = IntgemmViaRuy::Int16::Type;
+template <> struct intgemm_<Type::int16> {using width = fakeGemm::Int16;
+                                          using type = int16_t;
                                           constexpr static const Type intgemmType = Type::intgemm16;};
 
 #endif // USE_INTGEMM
@@ -105,9 +109,14 @@ template <> struct intgemm_<Type::int16> {using width = IntgemmViaRuy::Int16;
 // in our binary format. Then we copy the quantizationMultiplier information at the end
 template<Type vtype>
 void prepareAndTransposeB(io::Item& item, const char * input) {
-    #ifdef COMPILE_CPU
+#ifdef COMPILE_CPU
     typedef typename intgemm_<vtype>::type Integer;
     Integer * output_tensor = reinterpret_cast<Integer *>(&(*item.bytes.begin()));
+#ifdef ARM
+    // On arm we do RowM * ColM. Our input already comes transposed due to the way we prepare matrices in the binary
+    // So on arm ALL we need to do is just copy. No need for pre
+    std::memcpy(output_tensor, reinterpret_cast<const Integer *>(input), sizeof(Integer) * item.shape.elements());
+#else
     // Sometimes we will end up with misaligned intput (and output) so we can't use them directly.
     // If this is the case, we will need to temporary allocate aligned memory, copy the results, and then free it
     if (reinterpret_cast<uintptr_t>(input) % 64 == 0 && reinterpret_cast<uintptr_t>(output_tensor) % 64 == 0) {
@@ -118,7 +127,7 @@ void prepareAndTransposeB(io::Item& item, const char * input) {
                                         (Index)rows(item.shape),  //Since we only transposed, but didn't update the shape when constructing the binary 
                                         (Index)cols(item.shape), //rows here returns the columns of the transposed input matrix, and cols -> the rows
                                         (int8_t *)output_tensor);
-    #else
+    #elif defined(USE_INTGEMM)
         intgemm_<vtype>::width::PrepareBQuantizedTransposed(reinterpret_cast<const Integer *>(input),
                                                    output_tensor,
                                                    rows(item.shape),  //Since we only transposed, but didn't update the shape when constructing the binary, 
@@ -135,7 +144,7 @@ void prepareAndTransposeB(io::Item& item, const char * input) {
                                         (Index)rows(item.shape),  //Since we only transposed, but didn't update the shape when constructing the binary, 
                                         (Index)cols(item.shape), //rows here returns the columns of the transposed input matrix, and cols -> the rows
                                         reinterpret_cast<int8_t *>(aligned_output));
-    #else
+    #elif defined(USE_INTGEMM)
         intgemm_<vtype>::width::PrepareBQuantizedTransposed(reinterpret_cast<const Integer *>(aligned_input),
                                                    reinterpret_cast<Integer *>(aligned_output),
                                                    rows(item.shape),  //Since we only transposed, but didn't update the shape when constructing the binary, 
@@ -146,12 +155,13 @@ void prepareAndTransposeB(io::Item& item, const char * input) {
         genericFree(aligned_input);
         genericFree(aligned_output);
     }
+#endif
     //Copy the quantMult
     float quantMult = *(reinterpret_cast<const float *>(reinterpret_cast<const Integer *>(input) + item.shape.elements()));
     *(reinterpret_cast<float *>(&(*(output_tensor + item.shape.elements())))) = quantMult;
-    #else // COMPILE_CPU
+#else // COMPILE_CPU
     ABORT("Using intgemm models is supported only with -DCOMPILE_CPU=on");
-    #endif
+#endif
 }
 
 template<Type vtype>

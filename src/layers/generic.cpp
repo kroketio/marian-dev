@@ -7,8 +7,11 @@
 #include "rnn/types.h"     // for State::select()
 #include "models/states.h" // for EncoderState
 #include "layers/lsh.h"
+#ifdef ARM
+#include "tensors/cpu/ruy_interface.h"
+#else
 #include "tensors/cpu/intgemm_interface.h"
-
+#endif
 
 namespace marian {
   Logits::Logits(Expr logits) : Logits(New<RationalLoss>(logits, nullptr)) {} // single-output constructor from Expr only (RationalLoss has no count)
