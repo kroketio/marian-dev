@@ -14,6 +14,7 @@ project(marian CXX C)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+include(FindCcache)
 include(CMakeDependentOption)
 
 # Architecture detection
@@ -45,6 +46,7 @@ option(USE_CUDNN "Use CUDNN library" OFF)
 option(USE_DOXYGEN "Build documentation with Doxygen" ON)
 option(USE_FBGEMM "Use FBGEMM" OFF)
 option(USE_INTGEMM "Use INTGEMM" OFF)
+message(STATUS "AAAAAAAAAAAA ${USE_INTGEMM}")
 option(USE_MKL "Compile with MKL support" ON)
 option(USE_MPI "Use MPI library" OFF)
 option(USE_NCCL "Use NCCL library" ON)
@@ -65,7 +67,8 @@ CMAKE_DEPENDENT_OPTION(USE_ONNX_SGEMM "Compile with wasm compatible blas" ON
 CMAKE_DEPENDENT_OPTION(COMPILE_WITHOUT_EXCEPTIONS "Compile without exceptions" ON
                        "USE_WASM_COMPATIBLE_SOURCE" OFF)
 
-if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm")
+message(STATUS "aaaaaaaaaaaaa ${CMAKE_TARGET_ARCHITECTURE_CODE}")
+if(${CMAKE_TARGET_ARCHITECTURE_CODE} MATCHES "arm*")
   option(USE_RUY "Use Ruy" ON)
 
   # Apple M1 has Apple Accelerate. Otherwise fallback to RUY
@@ -407,6 +410,22 @@ endif()
 
 # Find packages
 set(EXT_LIBS ${EXT_LIBS} ${CMAKE_DL_LIBS})
+
+add_compile_options(-mfpu=crypto-neon-fp-armv8 -march=armv8-a+crc -mcpu=cortex-a72)
+add_definitions(-D__arm__=1)
+#FIND_PACKAGE(ARM)
+#IF (NEON_FOUND)
+#  MESSAGE(STATUS "Neon found with compiler flag : -mfpu=neon -D__NEON__")
+#  SET(CMAKE_C_FLAGS "-mfpu=neon -D__NEON__ ${CMAKE_C_FLAGS}")
+#ENDIF (NEON_FOUND)
+#IF (CORTEXA8_FOUND)
+#  MESSAGE(STATUS "Cortex-A8 Found with compiler flag : -mcpu=cortex-a8")
+#  SET(CMAKE_C_FLAGS "-mcpu=cortex-a8 -fprefetch-loop-arrays ${CMAKE_C_FLAGS}")
+#ENDIF (CORTEXA8_FOUND)
+#IF (CORTEXA9_FOUND)
+#  MESSAGE(STATUS "Cortex-A9 Found with compiler flag : -mcpu=cortex-a9")
+#  SET(CMAKE_C_FLAGS "-mcpu=cortex-a9 ${CMAKE_C_FLAGS}")
+#ENDIF (CORTEXA9_FOUND)
 
 ###############################################################################
 if(COMPILE_CUDA)

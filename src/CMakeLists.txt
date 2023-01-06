@@ -134,6 +134,7 @@ if (NOT USE_WASM_COMPATIBLE_SOURCE)
 endif()
 
 add_library(marian STATIC ${MARIAN_SOURCES})
+target_compile_definitions(marian PUBLIC __ARM_NEON__=1)
 
 target_compile_options(marian PRIVATE ${ALL_WARNINGS})
 
@@ -149,19 +150,10 @@ target_compile_options(marian PRIVATE ${ALL_WARNINGS})
 #
 # We set MARIAN_GIT_DIR to the appropriate path, depending on whether
 # ${CMAKE_CURRENT_SOURCE_DIR}/../.git is a directory or file.
-set(MARIAN_GIT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../.git)
-if(NOT IS_DIRECTORY ${MARIAN_GIT_DIR}) # i.e., it's a submodule
-  file(READ ${MARIAN_GIT_DIR} MARIAN_GIT_DIR)
-  string(REGEX REPLACE "gitdir: (.*)\n" "\\1" MARIAN_GIT_DIR ${MARIAN_GIT_DIR})
-  if(NOT IS_ABSOLUTE ${MARIAN_GIT_DIR})
-    get_filename_component(MARIAN_GIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../${MARIAN_GIT_DIR}" ABSOLUTE)
-  endif()
-endif(NOT IS_DIRECTORY ${MARIAN_GIT_DIR})
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/common/git_revision.h
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND git log -1 --pretty=format:\#define\ GIT_REVISION\ \"\%h\ \%ai\" > ${CMAKE_CURRENT_SOURCE_DIR}/common/git_revision.h
-  DEPENDS ${MARIAN_GIT_DIR}/logs/HEAD
+  COMMAND echo 1 > ${CMAKE_CURRENT_SOURCE_DIR}/common/git_revision.h
   VERBATIM
 )
 add_custom_target(marian_version DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/common/git_revision.h)

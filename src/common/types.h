@@ -18,11 +18,11 @@
 
 #ifndef __CUDACC__ // NVCC is very unreliable when it comes to CPU intrinsics, we hide them completely from NVCC-compiled code
 
-#ifdef __AVX__
-#include <immintrin.h>
-#elif __SSE__
-#include <xmmintrin.h>
-#endif
+#define SIMDE_ENABLE_NATIVE_ALIASES
+#include <simde/x86/sse.h>
+#include <simde/x86/sse2.h>
+#include <simde/x86/avx.h>
+#include <simde/x86/avx2.h>
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
 #include <arm_neon.h>

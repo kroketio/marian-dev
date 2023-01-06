@@ -29,7 +29,9 @@
   (this is the zlib license)
 */
 
-#include <xmmintrin.h>
+//#include <xmmintrin.h>
+#define SIMDE_ENABLE_NATIVE_ALIASES
+#include <simde/x86/sse.h>
 
 /* yes I know, the top of this file is quite ugly */
 

@@ -13,6 +13,7 @@ endif()
 add_subdirectory(./pathie-cpp)
 
 if(USE_INTGEMM)
+  message(STATUS "BBBBBBBBBBBBBBB ${USE_INTGEMM}")
   set(INTGEMM_DONT_BUILD_TESTS ON CACHE BOOL "Disable intgemm tests")
   add_subdirectory(./intgemm)
 endif(USE_INTGEMM)
